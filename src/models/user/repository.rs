@@ -6,7 +6,7 @@ use super::{User, UserController, UserDTO, UserModel, UserRepo};
 
 impl UserRepo {
     pub fn new() -> Self {
-        todo!()
+        aatodo!()
     }
 
     pub fn register_user(&self, user_dto: UserDTO) -> Result<UserController, sqlx::Error> {

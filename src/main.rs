@@ -1,12 +1,15 @@
 use actix_web::{App, HttpServer};
 use handler::users::user_scope;
+use lazy_static::lazy_static;
 use models::user::UserRepo;
 use sqlx::PgPool;
 
 mod handler;
 mod models;
 
-static (USER_REPO, POSTS_REPO) =  
+lazy_static! {
+    static ref DB_POOL: PgPool = establish_connection();
+}
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -14,6 +17,6 @@ async fn main() -> std::io::Result<()> {
         .run()
         .await
 }
-pub fn establish_connection() -> (UserRepo, _) {
+pub fn establish_connection() -> PgPool {
     todo!()
 }

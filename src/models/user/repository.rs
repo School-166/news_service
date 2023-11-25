@@ -4,9 +4,13 @@ use crate::models::Model;
 
 use super::{User, UserController, UserDTO, UserModel, UserRepo};
 
+lazy_static!{
+    static ref USER_REPO: UserRepo = UserRepo(establish_connection());
+}
+
 impl UserRepo {
-    pub fn new() -> Self {
-        aatodo!()
+    pub fn get_instance() -> Self {
+        todo!()
     }
 
     pub fn register_user(&self, user_dto: UserDTO) -> Result<UserController, sqlx::Error> {

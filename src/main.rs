@@ -11,6 +11,10 @@ lazy_static! {
     static ref DB_POOL: PgPool = establish_connection();
 }
 
+pub fn get_db_pool()->PgPool{
+    DB_POOL.clone()
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     HttpServer::new(|| App::new().service(user_scope()))

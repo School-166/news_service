@@ -1,6 +1,10 @@
-use std::cell::RefCell;
+use std::{cell::RefCell, str::FromStr};
 
+use actix_web::body::to_bytes;
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+
+use self::controlller::Class;
 
 use super::{Controller, Model};
 
@@ -8,21 +12,18 @@ pub mod controlller;
 pub mod implementation;
 pub mod repository;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct UserModel {
-    user_dto: UserDTO,
-}
-
-#[derive(Clone)]
-pub struct UserDTO {
     username: String,
     first_name: String,
     last_name: String,
     password: String,
+    email: String,
+    phone_number: Option<String>,
     user_specs: UserType,
 }
 
-impl UserDTO {
+impl UserModel {
     pub fn username(&self) -> String {
         self.username.clone()
     }
@@ -40,31 +41,50 @@ impl UserDTO {
     pub fn user_specs(&self) -> UserType {
         self.user_specs.clone()
     }
+
+    pub fn phone_number(&self) -> Option<String> {
+        self.phone_number.clone()
+    }
+
+    pub fn email(&self) -> String {
+        self.email.clone()
+    }
 }
 
-#[derive(Clone)]
-pub enum Subject {}
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum Subject {
+    Mathematics,
+    Physics,
+    Chemistry,
+    Biology,
+    Uzbek,
+    Russian,
+    English,
+    History,
+    Geography,
+    Literature,
+    PhysicalEducation,
+    ComputerScience,
+    Economics,
+    Law,
+    Education,
+}
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum UserType {
-    Teacher {
-        subject: Subject,
-        school: u16,
-    },
-    Pupil {
-        class_char: char,
-        class_number: u8,
-        school: u16,
-    },
-    Administrator {
-        job_title: String,
-    },
+    Teacher { subject: Subject, school: i32 },
+    Pupil { class: Class, school: i32 },
+    Administrator { job_title: String, school: i32 },
     Other,
 }
 
 impl UserType {
     pub fn is_administrator(&self) -> bool {
-        if let Self::Administrator { job_title: _ } = self {
+        if let Self::Administrator {
+            job_title: _,
+            school: _,
+        } = self
+        {
             return true;
         }
         false
@@ -72,8 +92,7 @@ impl UserType {
 
     pub fn is_pupil(&self) -> bool {
         if let Self::Pupil {
-            class_char: _,
-            class_number: _,
+            class: _,
             school: _,
         } = self
         {
@@ -90,7 +109,11 @@ impl UserType {
     }
 
     pub fn is_teacher(&self) -> bool {
-        if let Self::Teacher { subject: _, school } = self {
+        if let Self::Teacher {
+            subject: _,
+            school: _,
+        } = self
+        {
             return true;
         }
         false
@@ -105,32 +128,36 @@ impl Model for UserModel {
     }
 }
 
-impl UserModel {
-    pub fn username(&self) -> String {
-        self.user_dto.username()
-    }
-
-    pub fn first_name(&self) -> String {
-        self.user_dto.first_name()
-    }
-    pub fn last_name(&self) -> String {
-        self.user_dto.last_name()
-    }
-    pub fn password(&self) -> String {
-        self.user_dto.password()
-    }
-
-    pub fn user_specs(&self) -> UserType {
-        self.user_dto.user_specs()
-    }
-}
-
 impl Controller for UserController {
     type Model = UserModel;
     fn model(&self) -> UserModel {
-        self.0.into_inner().clone()
+        self.0.clone().into_inner().clone()
     }
 }
 
-pub struct UserRepo(PgPool);
+pub struct UserRepo(&'static PgPool);
 pub struct UserController(RefCell<UserModel>);
+impl FromStr for Subject {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "Mathematics" => Self::Mathematics,
+            "Physics" => Self::Physics,
+            "Chemistry" => Self::Chemistry,
+            "Biology" => Self::Biology,
+            "Uzbek" => Self::Uzbek,
+            "Russian" => Self::Russian,
+            "English" => Self::English,
+            "History" => Self::History,
+            "Geography" => Self::Geography,
+            "Literature" => Self::Literature,
+            "Physical Education" => Self::PhysicalEducation,
+            "Computer Science" => Self::ComputerScience,
+            "Economics" => Self::Economics,
+            "Law" => Self::Law,
+            "Education" => Self::Education,
+            _ => return Err(()),
+        })
+    }
+}

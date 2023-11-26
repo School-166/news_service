@@ -152,12 +152,35 @@ impl FromStr for Subject {
             "History" => Self::History,
             "Geography" => Self::Geography,
             "Literature" => Self::Literature,
-            "Physical Education" => Self::PhysicalEducation,
-            "Computer Science" => Self::ComputerScience,
+            "PhysicalEducation" => Self::PhysicalEducation,
+            "ComputerScience" => Self::ComputerScience,
             "Economics" => Self::Economics,
             "Law" => Self::Law,
             "Education" => Self::Education,
             _ => return Err(()),
         })
+    }
+}
+
+impl ToString for Subject {
+    fn to_string(&self) -> String {
+        match self {
+            Subject::Mathematics => "Mathematics",
+            Subject::Physics => "Physics",
+            Subject::Chemistry => "Chemistry",
+            Subject::Biology => "Biology",
+            Subject::Uzbek => "Uzbek",
+            Subject::Russian => "Russian",
+            Subject::English => "English",
+            Subject::History => "History",
+            Subject::Geography => "Geography",
+            Subject::Literature => "Literature",
+            Subject::PhysicalEducation => "Physical Education",
+            Subject::ComputerScience => "Computer Science",
+            Subject::Economics => "Economics",
+            Subject::Law => "Law",
+            Subject::Education => "Education",
+        }
+        .to_string()
     }
 }

@@ -32,7 +32,7 @@ async fn create_user(user_dto: &UserModel, pool: &PgPool) -> Result<(), Registra
             subject: _,
             school: _,
         } => "Teacher",
-        UserType::Pupil {
+        UserType::Student {
             class: _,
             school: _,
         } => "Student",
@@ -71,7 +71,7 @@ async fn create_user_specs(user_dto: &UserModel, pool: &PgPool) -> Result<(), Re
                 subject: _,
                 school: _,
             } => "teachers (username, subject, school) values ($1, $2, $3)",
-            UserType::Pupil {
+            UserType::Student {
                 class: _,
                 school: _,
             } => "students (username, class_num, class_char, school) values ($1, $2, $3, $4)",
@@ -85,7 +85,7 @@ async fn create_user_specs(user_dto: &UserModel, pool: &PgPool) -> Result<(), Re
     let mut query = sqlx::query(&sql).bind(user_dto.username());
     query = match user_dto.user_specs() {
         UserType::Teacher { subject, school } => query.bind(subject.to_string()).bind(school),
-        UserType::Pupil { class, school } => query
+        UserType::Student { class, school } => query
             .bind(class.class_num() as i8)
             .bind(class.class_char())
             .bind(school),
@@ -115,34 +115,27 @@ impl UserRepo {
             .expect("unreacheble"))
     }
 
-    pub fn get_by(&self, params: Vec<GetByQuery>) -> Option<UserController> {
-        
-        let conditions = {
-            let first_conditon = params.first();
-            if first_conditon.is_none(){
-                return None;
-            } 
-            let first_condition = first_conditon.unwrap();
-            
-            for i in 0..params.len(){match first_condition{
-                GetByQuery::Username(_) => todo!(),
-                GetByQuery::LastName(_) => todo!(),
-                GetByQuery::FirstName(_) => todo!(),
-                GetByQuery::Email(_) => todo!(),
-                GetByQuery::PhoneNumber(_) => todo!(),
-                GetByQuery::UserSpecs(_) => todo!(),
-            }}
-                   }
-                
-        
-        let sql = format!("select * from users 
-            join pupils on users.username = pupils.username 
-            join administrators on users.username = administrators.username 
-            join teachers on users.username = teachers.username where {};");
-        todo!()
+    pub fn get_one_by(&self, params: Vec<GetByQuery>) -> Option<UserController> {
+        let sql = match get_by_sql_query(params) {
+            Ok(value) => value,
+            Err(value) => return None,
+        };
+        match sqlx::query_as::<UserModel>(&sql).fetch_one(self.0).await{
+            Ok(user) => Some(user.controller()),
+            Err(_) => None,
+        }
     }
 
-    
+    pub fn get_many_by(&self, params: Vec<GetByQuery>) -> Vec<UserController> {
+        let sql = match get_by_sql_query(params) {
+            Ok(value) => value,
+            Err(value) => return value,
+        };
+        match sqlx::query_as::<UserModel>(&sql).fetch_many(self.0).await{
+            Ok(users) => Some(users.iter().map(|user| user.controller()).collect()),
+            Err(_) => None,
+        }
+    }
 
     pub async fn is_username_free(&self, username: String) -> bool {
         self.get_by(vec![GetByQuery::Username(username)]).is_none()
@@ -162,6 +155,28 @@ impl UserRepo {
         }
         Ok(())
     }
+}
+
+fn get_by_sql_query(params: Vec<GetByQuery>) -> Result<String, ()> {
+    let conditions = {
+        let first_conditon = params.first();
+        if first_conditon.is_none() {
+            return Err(());
+        }
+        let first_condition = first_conditon.unwrap();
+        let mut conditions = first_condition.to_sql();
+        for param in params.iter().next() {
+            conditions = format!("{} and {}", conditions, param.to_sql())
+        }
+        conditions
+    };
+    let sql = format!(
+        "select * from users 
+            join pupils on users.username = pupils.username 
+            join administrators on users.username = administrators.username 
+            join teachers on users.username = teachers.username where {};"
+    , conditions);
+    Ok(sql)
 }
 
 #[derive(Clone)]
@@ -211,7 +226,7 @@ fn calculate_table(
             }
             match model.user_specs() {
                 UserType::Teacher { subject, school } => "teachers",
-                UserType::Pupil { class, school } => "students",
+                UserType::Student { class, school } => "students",
                 UserType::Administrator { job_title, school } => "administrators",
                 UserType::Other => panic!(),
             }
@@ -270,6 +285,27 @@ pub enum GetByQuery {
     UserSpecs(UserType),
 }
 
+impl GetByQuery {
+    pub fn to_sql(&self) -> String {
+        match self {
+            GetByQuery::Username(username) => format!("users.username = '{}'", username),
+            GetByQuery::LastName(last_name) => format!("users.last_name = '{}'", last_name),
+            GetByQuery::FirstName(first_name) => format!("users.first_name = '{}'", first_name),
+            GetByQuery::Email(email) => format!("users.email = '{}'", email),
+            GetByQuery::PhoneNumber(phone_number) => format!("users.phone_number", phone_number),
+            GetByQuery::UserSpecs(specs) => format!(
+                "users.user_specs = '{}'",
+                match specs {
+                    UserType::Teacher { subject, school } => "Teacher",
+                    UserType::Student { class, school } => "Student",
+                    UserType::Administrator { job_title, school } => "Administrator",
+                    UserType::Other => "Other",
+                }
+            ),
+        }
+    }
+}
+
 pub enum ChangeParamsError {
     UserDoesntExist,
     ClassParametrChangingForNotStudent,
@@ -293,7 +329,7 @@ impl FromRow<'_, PgRow> for UserModel {
                     subject: Subject::from_str(row.get("subject")).unwrap(),
                     school: row.get("school"),
                 },
-                "Student" => UserType::Pupil {
+                "Student" => UserType::Student {
                     class: Class::from(
                         *{
                             let class_char: String = row.get("class_char");

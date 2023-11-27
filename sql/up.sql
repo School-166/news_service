@@ -29,7 +29,8 @@ CREATE TABLE users(
     last_name NAME NOT NULL,
     first_name NAME NOT NULL,
     user_specs user_specs NOT NULL,
-    email VARCHAR(255),
+    email VARCHAR(255) NOT NULL,
+    birth_date DATE NOT NULL,
     phone_number VARCHAR(13)
 );
 

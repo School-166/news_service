@@ -73,7 +73,7 @@ pub enum Subject {
 #[derive(Clone, Serialize, Deserialize)]
 pub enum UserType {
     Teacher { subject: Subject, school: i32 },
-    Pupil { class: Class, school: i32 },
+    Student { class: Class, school: i32 },
     Administrator { job_title: String, school: i32 },
     Other,
 }
@@ -91,7 +91,7 @@ impl UserType {
     }
 
     pub fn is_pupil(&self) -> bool {
-        if let Self::Pupil {
+        if let Self::Student {
             class: _,
             school: _,
         } = self

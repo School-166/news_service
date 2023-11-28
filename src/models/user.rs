@@ -1,25 +1,27 @@
-use std::{cell::RefCell, str::FromStr};
-
-use actix_web::body::to_bytes;
+use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use std::{cell::RefCell, str::FromStr};
 
-use self::controlller::Class;
+use self::controller::Class;
 
 use super::{Controller, Model};
 
-pub mod controlller;
+pub mod controller;
 pub mod implementation;
 pub mod repository;
+pub mod validator;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct UserModel {
     username: String,
+    about: String,
     first_name: String,
     last_name: String,
     password: String,
     email: String,
     phone_number: Option<String>,
+    birth_date: NaiveDate,
     user_specs: UserType,
 }
 
@@ -27,7 +29,9 @@ impl UserModel {
     pub fn username(&self) -> String {
         self.username.clone()
     }
-
+    pub fn about(&self) -> String {
+        self.about.clone()
+    }
     pub fn first_name(&self) -> String {
         self.first_name.clone()
     }
@@ -36,6 +40,9 @@ impl UserModel {
     }
     pub fn password(&self) -> String {
         self.password.clone()
+    }
+    pub fn birth_date(&self) -> NaiveDate {
+        self.birth_date.clone()
     }
 
     pub fn user_specs(&self) -> UserType {
@@ -72,30 +79,22 @@ pub enum Subject {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum UserType {
-    Teacher { subject: Subject, school: i32 },
-    Student { class: Class, school: i32 },
-    Administrator { job_title: String, school: i32 },
+    Teacher { subject: Subject },
+    Student { class: Class },
+    Administrator { job_title: String },
     Other,
 }
 
 impl UserType {
     pub fn is_administrator(&self) -> bool {
-        if let Self::Administrator {
-            job_title: _,
-            school: _,
-        } = self
-        {
+        if let Self::Administrator { job_title: _ } = self {
             return true;
         }
         false
     }
 
     pub fn is_pupil(&self) -> bool {
-        if let Self::Student {
-            class: _,
-            school: _,
-        } = self
-        {
+        if let Self::Student { class: _ } = self {
             return true;
         }
         false
@@ -109,11 +108,7 @@ impl UserType {
     }
 
     pub fn is_teacher(&self) -> bool {
-        if let Self::Teacher {
-            subject: _,
-            school: _,
-        } = self
-        {
+        if let Self::Teacher { subject: _ } = self {
             return true;
         }
         false

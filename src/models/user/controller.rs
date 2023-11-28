@@ -18,6 +18,7 @@ impl UserController {
             .await
             .change_params(vec![ChangeParamQuery::Class(class)], self.model())
             .await
+            .expect("unreacheble")
     }
 }
 

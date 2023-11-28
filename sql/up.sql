@@ -25,6 +25,7 @@ CREATE TYPE subject AS ENUM (
 
 CREATE TABLE users(
     username NAME PRIMARY KEY NOT NULL UNIQUE,
+    about VARCHAR(500) NOT NULL,
     password VARCHAR(24) NOT NULL,
     last_name NAME NOT NULL,
     first_name NAME NOT NULL,
@@ -37,20 +38,17 @@ CREATE TABLE users(
 CREATE TABLE students(
     username NAME NOT NULL UNIQUE REFERENCES users(username),
     class_num SMALLINT NOT NULL,
-    class_char VARCHAR(1) NOT NULL,
-    school_num SMALLINT NOT NULL                   
+    class_char VARCHAR(1) NOT NULL
 );
 
 CREATE TABLE teachers(
     username NAME NOT NULL UNIQUE REFERENCES users(username),
-    school_num SMALLINT NOT NULL,
     subject subject  NOT NULL
 );
 
 CREATE TABLE administrators(
     username NAME NOT NULL UNIQUE REFERENCES users(username),
-    job_title TEXT NOT NULL,
-    school_num SMALLINT NOT NULL    
+    job_title TEXT NOT NULL
 );
 
 CREATE TABLE posts(

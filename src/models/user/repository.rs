@@ -1,6 +1,8 @@
-use super::{controlller::Class, Subject, UserController, UserModel, UserRepo, UserType};
-use crate::get_db_pool;
-use actix_web::middleware::Condition;
+use super::{
+    controller::Class, validator::ValidatedChangeParamQuery, Subject, UserController, UserModel,
+    UserRepo, UserType,
+};
+use crate::{get_db_pool, models::Model};
 use async_once::AsyncOnce;
 use core::panic;
 use lazy_static::lazy_static;
@@ -28,24 +30,15 @@ async fn create_user(user_dto: &UserModel, pool: &PgPool) -> Result<(), Registra
     }
 
     let user_type = match user_dto.user_specs() {
-        UserType::Teacher {
-            subject: _,
-            school: _,
-        } => "Teacher",
-        UserType::Student {
-            class: _,
-            school: _,
-        } => "Student",
-        UserType::Administrator {
-            job_title: _,
-            school: _,
-        } => "Administrator",
+        UserType::Teacher { subject: _ } => "Teacher",
+        UserType::Student { class: _ } => "Student",
+        UserType::Administrator { job_title: _ } => "Administrator",
         UserType::Other => "Other",
     };
 
     let sql = "insert into users 
-                       (username, password, email, first_name, last_name, phone_number, user_type)
-                    values ($1, $2, $3, $4, $5, $6, $7);";
+                       (username, password, email, first_name, last_name, phone_number, user_type, birth_date)
+                    values ($1, $2, $3, $4, $5, $6, $7, $8);";
     if sqlx::query(sql)
         .bind(user_dto.username())
         .bind(user_dto.password())
@@ -54,6 +47,7 @@ async fn create_user(user_dto: &UserModel, pool: &PgPool) -> Result<(), Registra
         .bind(user_dto.last_name())
         .bind(user_dto.phone_number())
         .bind(user_type)
+        .bind(user_dto.birth_date())
         .execute(pool)
         .await
         .is_err()
@@ -67,29 +61,19 @@ async fn create_user_specs(user_dto: &UserModel, pool: &PgPool) -> Result<(), Re
     let sql = format!(
         "insert into {};",
         match user_dto.user_specs() {
-            UserType::Teacher {
-                subject: _,
-                school: _,
-            } => "teachers (username, subject, school) values ($1, $2, $3)",
-            UserType::Student {
-                class: _,
-                school: _,
-            } => "students (username, class_num, class_char, school) values ($1, $2, $3, $4)",
-            UserType::Administrator {
-                job_title: _,
-                school: _,
-            } => "administrators (username, job_title, school) values($1, $2, $3)",
+            UserType::Teacher { subject: _ } => "teachers (username, subject) values ($1, $2)",
+            UserType::Student { class: _ } =>
+                "students (username, class_num, class_char) values ($1, $2, $3)",
+            UserType::Administrator { job_title: _ } =>
+                "administrators (username, job_title) values($1, $2)",
             UserType::Other => return Ok(()),
         }
     );
     let mut query = sqlx::query(&sql).bind(user_dto.username());
     query = match user_dto.user_specs() {
-        UserType::Teacher { subject, school } => query.bind(subject.to_string()).bind(school),
-        UserType::Student { class, school } => query
-            .bind(class.class_num() as i8)
-            .bind(class.class_char())
-            .bind(school),
-        UserType::Administrator { job_title, school } => query.bind(job_title).bind(school),
+        UserType::Teacher { subject } => query.bind(subject.to_string()),
+        UserType::Student { class } => query.bind(class.class_num() as i8).bind(class.class_char()),
+        UserType::Administrator { job_title } => query.bind(job_title),
         UserType::Other => return Ok(()),
     };
 
@@ -111,39 +95,42 @@ impl UserRepo {
         create_user(&user_dto, self.0).await?;
         create_user_specs(&user_dto, self.0).await?;
         Ok(self
-            .get_by(vec![GetByQuery::Username(user_dto.username())])
+            .get_one_by(vec![GetByQuery::Username(user_dto.username())])
+            .await
             .expect("unreacheble"))
     }
 
-    pub fn get_one_by(&self, params: Vec<GetByQuery>) -> Option<UserController> {
-        let sql = match get_by_sql_query(params) {
+    pub async fn get_one_by(&self, params: Vec<GetByQuery>) -> Option<UserController> {
+        let sql = match build_get_by_sql(params) {
             Ok(value) => value,
-            Err(value) => return None,
+            Err(_) => return None,
         };
-        match sqlx::query_as::<UserModel>(&sql).fetch_one(self.0).await{
+        match sqlx::query_as::<_, UserModel>(&sql).fetch_one(self.0).await {
             Ok(user) => Some(user.controller()),
             Err(_) => None,
         }
     }
 
-    pub fn get_many_by(&self, params: Vec<GetByQuery>) -> Vec<UserController> {
-        let sql = match get_by_sql_query(params) {
+    pub async fn get_many_by(&self, params: Vec<GetByQuery>) -> Vec<UserController> {
+        let sql = match build_get_by_sql(params) {
             Ok(value) => value,
-            Err(value) => return value,
+            Err(_) => return Vec::new(),
         };
-        match sqlx::query_as::<UserModel>(&sql).fetch_many(self.0).await{
-            Ok(users) => Some(users.iter().map(|user| user.controller()).collect()),
-            Err(_) => None,
+        match sqlx::query_as::<_, UserModel>(&sql).fetch_all(self.0).await {
+            Ok(users) => users.iter().map(|user| user.controller()).collect(),
+            Err(_) => Vec::new(),
         }
     }
 
     pub async fn is_username_free(&self, username: String) -> bool {
-        self.get_by(vec![GetByQuery::Username(username)]).is_none()
+        self.get_one_by(vec![GetByQuery::Username(username)])
+            .await
+            .is_none()
     }
 
     pub async fn change_params(
         &self,
-        params: Vec<ChangeParamQuery>,
+        params: Vec<ValidatedChangeParamQuery>,
         model: UserModel,
     ) -> Result<(), ChangeParamsError> {
         if self.is_username_free(model.username()).await {
@@ -151,13 +138,13 @@ impl UserRepo {
         }
 
         for param in params {
-            change_parametr(param, &model, self.0).await?;
+            bind_change_param_query(param.parametr(), &model, self.0).await?;
         }
         Ok(())
     }
 }
 
-fn get_by_sql_query(params: Vec<GetByQuery>) -> Result<String, ()> {
+fn build_get_by_sql(params: Vec<GetByQuery>) -> Result<String, ()> {
     let conditions = {
         let first_conditon = params.first();
         if first_conditon.is_none() {
@@ -174,35 +161,34 @@ fn get_by_sql_query(params: Vec<GetByQuery>) -> Result<String, ()> {
         "select * from users 
             join pupils on users.username = pupils.username 
             join administrators on users.username = administrators.username 
-            join teachers on users.username = teachers.username where {};"
-    , conditions);
+            join teachers on users.username = teachers.username where {};",
+        conditions
+    );
     Ok(sql)
 }
 
 #[derive(Clone)]
 pub enum ChangeParamQuery {
     UserTable(UserTableParams),
-    School(i32),
     JobTitle(String),
     Class(Class),
 }
 
-async fn change_parametr(
+async fn bind_change_param_query(
     param: ChangeParamQuery,
     model: &UserModel,
     pool: &PgPool,
 ) -> Result<(), ChangeParamsError> {
-    let sql = build_sql_string(calculate_table(param.clone(), model)?, param.clone());
+    let sql = build_changing_param_sql(choose_table(param.clone(), model)?, param.clone());
     let mut query = sqlx::query(&sql).bind(model.username());
     query = match param.clone() {
         ChangeParamQuery::UserTable(param) => match param {
             UserTableParams::Password(password) => query.bind(password),
             UserTableParams::Email(email) => query.bind(email),
-            UserTableParams::PhoneString(phone_number) => query.bind(phone_number),
+            UserTableParams::PhoneNumber(phone_number) => query.bind(phone_number),
             UserTableParams::FirstName(first_name) => query.bind(first_name),
             UserTableParams::LastName(last_name) => query.bind(last_name),
         },
-        ChangeParamQuery::School(school) => query.bind(school),
         ChangeParamQuery::JobTitle(job_title) => query.bind(job_title),
         ChangeParamQuery::Class(class) => {
             query.bind(class.class_num() as i8).bind(class.class_char())
@@ -214,23 +200,9 @@ async fn change_parametr(
     Ok(())
 }
 
-fn calculate_table(
-    param: ChangeParamQuery,
-    model: &UserModel,
-) -> Result<String, ChangeParamsError> {
+fn choose_table(param: ChangeParamQuery, model: &UserModel) -> Result<String, ChangeParamsError> {
     let table = match param {
         ChangeParamQuery::UserTable(_) => "users",
-        ChangeParamQuery::School(_) => {
-            if !model.user_specs().is_school_member() {
-                return Err(ChangeParamsError::ChangingSchoolForNotSchoolMember);
-            }
-            match model.user_specs() {
-                UserType::Teacher { subject, school } => "teachers",
-                UserType::Student { class, school } => "students",
-                UserType::Administrator { job_title, school } => "administrators",
-                UserType::Other => panic!(),
-            }
-        }
         ChangeParamQuery::JobTitle(_) => {
             if !model.user_specs().is_administrator() {
                 return Err(ChangeParamsError::ChangingJobTitleForNotAdministrator);
@@ -248,7 +220,7 @@ fn calculate_table(
     Ok(table)
 }
 
-fn build_sql_string(table: String, param: ChangeParamQuery) -> String {
+fn build_changing_param_sql(table: String, param: ChangeParamQuery) -> String {
     format!(
         "update {} where username=$1 set {};",
         table,
@@ -256,11 +228,10 @@ fn build_sql_string(table: String, param: ChangeParamQuery) -> String {
             ChangeParamQuery::UserTable(param) => match param {
                 UserTableParams::Password(_) => "password = $2",
                 UserTableParams::Email(_) => "email = $2",
-                UserTableParams::PhoneString(_) => "phone_number = $2",
+                UserTableParams::PhoneNumber(_) => "phone_number = $2",
                 UserTableParams::FirstName(_) => "first_name = $2",
                 UserTableParams::LastName(_) => "last_name = $2",
             },
-            ChangeParamQuery::School(_) => "school = $2",
             ChangeParamQuery::JobTitle(_) => "job_title = $2",
             ChangeParamQuery::Class(_) => "class_num = $2, class_char = $3",
         }
@@ -271,7 +242,7 @@ fn build_sql_string(table: String, param: ChangeParamQuery) -> String {
 pub enum UserTableParams {
     Password(String),
     Email(String),
-    PhoneString(Option<String>),
+    PhoneNumber(Option<String>),
     FirstName(String),
     LastName(String),
 }
@@ -292,13 +263,15 @@ impl GetByQuery {
             GetByQuery::LastName(last_name) => format!("users.last_name = '{}'", last_name),
             GetByQuery::FirstName(first_name) => format!("users.first_name = '{}'", first_name),
             GetByQuery::Email(email) => format!("users.email = '{}'", email),
-            GetByQuery::PhoneNumber(phone_number) => format!("users.phone_number", phone_number),
+            GetByQuery::PhoneNumber(phone_number) => {
+                format!("users.phone_number = '{}'", phone_number)
+            }
             GetByQuery::UserSpecs(specs) => format!(
                 "users.user_specs = '{}'",
                 match specs {
-                    UserType::Teacher { subject, school } => "Teacher",
-                    UserType::Student { class, school } => "Student",
-                    UserType::Administrator { job_title, school } => "Administrator",
+                    UserType::Teacher { subject } => "Teacher",
+                    UserType::Student { class } => "Student",
+                    UserType::Administrator { job_title } => "Administrator",
                     UserType::Other => "Other",
                 }
             ),
@@ -309,7 +282,6 @@ impl GetByQuery {
 pub enum ChangeParamsError {
     UserDoesntExist,
     ClassParametrChangingForNotStudent,
-    ChangingSchoolForNotSchoolMember,
     ChangingJobTitleForNotAdministrator,
     DBProblems,
 }
@@ -324,10 +296,11 @@ impl FromRow<'_, PgRow> for UserModel {
             password: row.get("password"),
             email: row.get("email"),
             phone_number: row.get("phone_number"),
+            birth_date: row.get("birth_date"),
+            about: row.get("about"),
             user_specs: match user_specs {
                 "Teacher" => UserType::Teacher {
                     subject: Subject::from_str(row.get("subject")).unwrap(),
-                    school: row.get("school"),
                 },
                 "Student" => UserType::Student {
                     class: Class::from(
@@ -347,11 +320,9 @@ impl FromRow<'_, PgRow> for UserModel {
                         .unwrap(),
                     )
                     .unwrap(),
-                    school: row.get("school"),
                 },
                 "Administrator" => UserType::Administrator {
                     job_title: row.get("job_title"),
-                    school: row.get("school"),
                 },
                 "Other" => UserType::Other,
                 _ => panic!("Enum can't contain this value"),

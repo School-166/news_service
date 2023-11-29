@@ -1,4 +1,7 @@
-use super::{UserController, UserRepo};
+use super::{
+    repository::queries::{validation::ValidationError, ChangeQueryParam, Validateble},
+    UserController, UserRepo,
+};
 use crate::models::Controller;
 use serde::{Deserialize, Serialize};
 
@@ -11,16 +14,20 @@ impl UserController {
         todo!()
     }
 
-    pub async fn change_class(&self, class: Class) {
+    pub async fn change_class(&self, class: Class) -> Result<(), Vec<ValidationError>> {
         UserRepo::get_instance()
             .await
-            .change_params(vec![ChangeParamQuery::Class(class)], self.model())
+            .change_params(
+                vec![ChangeQueryParam::Class(class).validate(&self.model())?],
+                self.model(),
+            )
             .await
-            .expect("unreacheble")
+            .expect("unreacheble");
+        Ok(())
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Class {
     class_char: u8,
     class_num: u8,

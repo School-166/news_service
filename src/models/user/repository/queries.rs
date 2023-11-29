@@ -1,6 +1,6 @@
 use crate::models::user::{controller::Class, UserModel, UserType};
 
-use self::validation::ValidatedChangeQueryParam;
+use self::validation::{ValidatedChangeQueryParam, ValidationError};
 pub mod validation;
 
 pub enum GetByQueryParam {
@@ -82,13 +82,14 @@ impl ToSql for GetByQueryParam {
     }
 }
 
+#[derive(Debug)]
 pub enum ChangeParamsError {
     UserDoesntExist,
     ClassParametrChangingForNotStudent,
     ChangingJobTitleForNotAdministrator,
+    ValidationError(Vec<ValidationError>),
     DBProblems,
 }
-
 impl ChangeQueryParam {
     fn select_table(&self) -> String {
         match self {
@@ -121,7 +122,9 @@ impl ToSql for ChangeQueryParam {
                 ChangeQueryParam::Email(email) => format!("email = '{}'", email),
                 ChangeQueryParam::PhoneNumber(phone_num) => format!(
                     "phone_number = {}",
-                    phone_num.map_or("NULL".to_string(), |phone_num| format!("'{}'", phone_num))
+                    phone_num
+                        .clone()
+                        .map_or("NULL".to_string(), |phone_num| format!("'{}'", phone_num))
                 ),
                 ChangeQueryParam::FirstName(first_name) => format!("first_name = '{}'", first_name),
                 ChangeQueryParam::LastName(last_name) => format!("last_name = '{}'", last_name),
@@ -151,7 +154,7 @@ impl ChangeQuery {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ChangeQueryParam {
     Password(String),
     About(String),

@@ -92,7 +92,7 @@ impl UserType {
         false
     }
 
-    pub fn is_pupil(&self) -> bool {
+    pub fn is_student(&self) -> bool {
         if let Self::Student { class: _ } = self {
             return true;
         }

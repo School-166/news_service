@@ -18,7 +18,7 @@ impl Validateble for ChangeQueryParam {
 
 impl ValidatedChangeQueryParam {
     fn validate(param: ChangeQueryParam, target: &UserModel) -> Result<Self, Vec<ValidationError>> {
-        match param {
+        match param.clone() {
             ChangeQueryParam::Password(password) => validate_password(password)?,
             ChangeQueryParam::Email(email) => validate_email(email)?,
             ChangeQueryParam::PhoneNumber(phone_num) => validate_phone_number(phone_num)?,
@@ -33,14 +33,21 @@ impl ValidatedChangeQueryParam {
                 if job_title.len() > 31 {
                     return Err(vec![ValidationError::InvalidJobTitle]);
                 }
+                if !target.user_specs().is_administrator() {
+                    return Err(vec![ValidationError::ChangingJobTitleForNotAdministrator]);
+                }
             }
-            ChangeQueryParam::Class(_) => {}
+            ChangeQueryParam::Class(_) => {
+                if !target.user_specs().is_student() {
+                    return Err(vec![ValidationError::ChangingClassForNotStudent]);
+                }
+            }
         }
         Ok(ValidatedChangeQueryParam(param))
     }
 
     pub fn param(&self) -> ChangeQueryParam {
-        self.0
+        self.0.clone()
     }
 }
 
@@ -110,6 +117,7 @@ fn validate_name(name: String) -> Result<(), Vec<ValidationError>> {
     Ok(())
 }
 
+#[derive(Debug)]
 pub enum ValidationError {
     InvalidPhoneNumber(InvalidPhoneNumber),
     InvalidPassword(InvalidPassword),
@@ -120,12 +128,15 @@ pub enum ValidationError {
     ChangingJobTitleForNotAdministrator,
     ChangingClassForNotStudent,
 }
+
+#[derive(Debug)]
 pub enum InvalidPhoneNumber {
     PhoneNumberToLong,
     PhoneNumberToSmall,
     PhoneNumberContainsOtherLiterals,
 }
 
+#[derive(Debug)]
 pub enum InvalidPassword {
     PasswordToLong,
     PasswordToShort,

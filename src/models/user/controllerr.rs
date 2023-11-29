@@ -5,8 +5,12 @@ use crate::models::Controller;
 use super::{repository::ChangeParamQuery, UserController, UserRepo};
 
 impl UserController {
-    pub fn change_name(&self, _name: String) -> Result<(), ()> {
-        todo!()
+    pub fn change_name(&self, name: String) -> Result<(), ()> {
+        UserRepo::get_instance()
+            .await
+            .change_params(vec![Chan], self.model())
+            .await
+            .expect("unreacheble")
     }
 
     pub fn change_last_name(&self, _last_name: String) -> Result<(), ()> {

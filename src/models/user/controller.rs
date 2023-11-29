@@ -1,8 +1,6 @@
-use serde::{Deserialize, Serialize};
-
+use super::{UserController, UserRepo};
 use crate::models::Controller;
-
-use super::{repository::ChangeParamQuery, UserController, UserRepo};
+use serde::{Deserialize, Serialize};
 
 impl UserController {
     pub fn change_name(&self, _name: String) -> Result<(), ()> {

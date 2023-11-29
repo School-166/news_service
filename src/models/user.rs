@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use std::{cell::RefCell, str::FromStr};
+use std::cell::RefCell;
 
 use self::controller::Class;
 
@@ -10,7 +10,6 @@ use super::{Controller, Model};
 pub mod controller;
 pub mod implementation;
 pub mod repository;
-pub mod validator;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct UserModel {
@@ -132,50 +131,3 @@ impl Controller for UserController {
 
 pub struct UserRepo(&'static PgPool);
 pub struct UserController(RefCell<UserModel>);
-impl FromStr for Subject {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s {
-            "Mathematics" => Self::Mathematics,
-            "Physics" => Self::Physics,
-            "Chemistry" => Self::Chemistry,
-            "Biology" => Self::Biology,
-            "Uzbek" => Self::Uzbek,
-            "Russian" => Self::Russian,
-            "English" => Self::English,
-            "History" => Self::History,
-            "Geography" => Self::Geography,
-            "Literature" => Self::Literature,
-            "PhysicalEducation" => Self::PhysicalEducation,
-            "ComputerScience" => Self::ComputerScience,
-            "Economics" => Self::Economics,
-            "Law" => Self::Law,
-            "Education" => Self::Education,
-            _ => return Err(()),
-        })
-    }
-}
-
-impl ToString for Subject {
-    fn to_string(&self) -> String {
-        match self {
-            Subject::Mathematics => "Mathematics",
-            Subject::Physics => "Physics",
-            Subject::Chemistry => "Chemistry",
-            Subject::Biology => "Biology",
-            Subject::Uzbek => "Uzbek",
-            Subject::Russian => "Russian",
-            Subject::English => "English",
-            Subject::History => "History",
-            Subject::Geography => "Geography",
-            Subject::Literature => "Literature",
-            Subject::PhysicalEducation => "Physical Education",
-            Subject::ComputerScience => "Computer Science",
-            Subject::Economics => "Economics",
-            Subject::Law => "Law",
-            Subject::Education => "Education",
-        }
-        .to_string()
-    }
-}

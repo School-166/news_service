@@ -70,6 +70,7 @@ CREATE TABLE posts(
 
 CREATE TABLE comments(
     uuid UUID PRIMARY KEY NOT NULL,
+    written_under UUID NOT NULL REFERNCES posts(uuid),
     content_on_russian TEXT NOT NULL,
     content_on_uzbek TEXT NOT NULL,
     content_on_english TEXT NOT NULL,

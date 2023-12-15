@@ -1,9 +1,11 @@
-use self::queries::{
-    validation::ValidatedChangeQueryParam, ChangeParamsError, ChangeQuery, GetByQuery,
-    GetByQueryParam, ToSql,
+use self::queries::{ChangeParamsError, ChangeQuery, GetByQueryParam};
+use crate::{
+    get_db_pool,
+    models::user::{UserModel, UserType},
+    prelude::{QueryInterpreter, ToSQL},
+    types::{Class, Subject},
+    validators::repository_query::users::ValidatedChangeQueryParam,
 };
-use super::{controller::Class, Subject, UserController, UserModel, UserRepo, UserType};
-use crate::{get_db_pool, models::Model};
 use async_once::AsyncOnce;
 use core::panic;
 use lazy_static::lazy_static;
@@ -11,6 +13,8 @@ use sqlx::{postgres::PgRow, FromRow, PgPool, Row};
 use std::str::FromStr;
 
 pub mod queries;
+
+pub struct UserRepo(&'static PgPool);
 
 lazy_static! {
     static ref USER_REPO: AsyncOnce<UserRepo> =
@@ -92,10 +96,7 @@ impl UserRepo {
         USER_REPO.get().await
     }
 
-    pub async fn register_user(
-        &self,
-        user_dto: UserModel,
-    ) -> Result<UserController, RegistrationError> {
+    pub async fn register_user(&self, user_dto: UserModel) -> Result<UserModel, RegistrationError> {
         create_user(&user_dto, self.0).await?;
         create_user_specs(&user_dto, self.0).await?;
         Ok(self
@@ -104,22 +105,19 @@ impl UserRepo {
             .expect("unreacheble"))
     }
 
-    pub async fn get_one_by(&self, params: Vec<GetByQueryParam>) -> Option<UserController> {
-        match sqlx::query_as::<_, UserModel>(&GetByQuery::new(params).to_sql())
-            .fetch_one(self.0)
+    pub async fn get_one_by(&self, params: Vec<GetByQueryParam>) -> Option<UserModel> {
+        self.get_many_by(params)
             .await
-        {
-            Ok(user) => Some(user.controller()),
-            Err(_) => None,
-        }
+            .first()
+            .map(|user| user.clone())
     }
 
-    pub async fn get_many_by(&self, params: Vec<GetByQueryParam>) -> Vec<UserController> {
-        match sqlx::query_as::<_, UserModel>(&GetByQuery::new(params).to_sql())
+    pub async fn get_many_by(&self, params: Vec<GetByQueryParam>) -> Vec<UserModel> {
+        match sqlx::query_as::<_, UserModel>(&Self::build_sql(params))
             .fetch_all(self.0)
             .await
         {
-            Ok(users) => users.iter().map(|user| user.controller()).collect(),
+            Ok(users) => users,
             Err(_) => Vec::new(),
         }
     }
@@ -145,6 +143,14 @@ impl UserRepo {
                 .await;
         }
         Ok(())
+    }
+}
+
+impl QueryInterpreter for UserRepo {
+    type Query = GetByQueryParam;
+
+    fn query() -> String {
+        "select * from users".to_string()
     }
 }
 
@@ -179,22 +185,6 @@ impl FromRow<'_, PgRow> for UserType {
             },
             "Other" => UserType::Other,
             _ => panic!("Enum can't contain this value"),
-        })
-    }
-}
-
-impl FromRow<'_, PgRow> for UserModel {
-    fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
-        Ok(UserModel {
-            username: row.get("username"),
-            first_name: row.get("first_name"),
-            last_name: row.get("last_name"),
-            password: row.get("password"),
-            email: row.get("email"),
-            phone_number: row.get("phone_number"),
-            birth_date: row.get("birth_date"),
-            about: row.get("about"),
-            user_specs: UserType::from_row(row)?,
         })
     }
 }

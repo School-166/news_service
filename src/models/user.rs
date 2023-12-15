@@ -1,17 +1,13 @@
+use super::Model;
+use crate::{
+    controllers::users::UserController,
+    types::{Class, Subject},
+};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
-use std::cell::RefCell;
+use sqlx::{postgres::PgRow, FromRow, Row};
 
-use self::controller::Class;
-
-use super::{Controller, Model};
-
-pub mod controller;
-pub mod implementation;
-pub mod repository;
-
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserModel {
     username: String,
     about: String,
@@ -57,26 +53,7 @@ impl UserModel {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub enum Subject {
-    Mathematics,
-    Physics,
-    Chemistry,
-    Biology,
-    Uzbek,
-    Russian,
-    English,
-    History,
-    Geography,
-    Literature,
-    PhysicalEducation,
-    ComputerScience,
-    Economics,
-    Law,
-    Education,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum UserType {
     Teacher { subject: Subject },
     Student { class: Class },
@@ -117,17 +94,23 @@ impl UserType {
 impl Model for UserModel {
     type Controller = UserController;
 
-    fn controller(&self) -> Self::Controller {
-        UserController(RefCell::new(self.clone()))
+    fn controller(self) -> Self::Controller {
+        UserController::from_model(self)
     }
 }
 
-impl Controller for UserController {
-    type Model = UserModel;
-    fn model(&self) -> UserModel {
-        self.0.clone().into_inner().clone()
+impl FromRow<'_, PgRow> for UserModel {
+    fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
+        Ok(UserModel {
+            username: row.get("username"),
+            first_name: row.get("first_name"),
+            last_name: row.get("last_name"),
+            password: row.get("password"),
+            email: row.get("email"),
+            phone_number: row.get("phone_number"),
+            birth_date: row.get("birth_date"),
+            about: row.get("about"),
+            user_specs: UserType::from_row(row)?,
+        })
     }
 }
-
-pub struct UserRepo(&'static PgPool);
-pub struct UserController(RefCell<UserModel>);

@@ -1,7 +1,9 @@
-use crate::models::user::{controller::Class, UserModel, UserType};
-
-use self::validation::{ValidatedChangeQueryParam, ValidationError};
-pub mod validation;
+use crate::{
+    models::user::{UserModel, UserType},
+    prelude::ToSQL,
+    types::Class,
+    validators::repository_query::users::{ValidatedChangeQueryParam, ValidationError},
+};
 
 pub enum GetByQueryParam {
     Username(String),
@@ -12,52 +14,7 @@ pub enum GetByQueryParam {
     UserSpecs(UserType),
 }
 
-pub struct GetByQuery {
-    params: Vec<GetByQueryParam>,
-}
-
-impl ToSql for GetByQuery {
-    fn to_sql(&self) -> String {
-        let conditions = {
-            let first_conditon = self.params.first();
-            if first_conditon.is_none() {
-                "users.username = NULL".to_string()
-            } else {
-                let first_condition = first_conditon.unwrap();
-                let mut conditions = first_condition.to_sql();
-                for param in self.params.iter().next() {
-                    conditions = format!("{} and {}", conditions, param.to_sql())
-                }
-                conditions
-            }
-        };
-        format!(
-            "select * from users 
-            join pupils on users.username = pupils.username 
-            join administrators on users.username = administrators.username 
-            join teachers on users.username = teachers.username where {};",
-            conditions
-        )
-    }
-}
-
-impl GetByQuery {
-    pub fn new(params: Vec<GetByQueryParam>) -> Self {
-        Self { params }
-    }
-}
-
-pub trait ToSql {
-    fn to_sql(&self) -> String;
-}
-
-pub trait Validateble {
-    type Validated;
-    type ValidationError;
-    fn validate(self, target: &UserModel) -> Result<Self::Validated, Vec<Self::ValidationError>>;
-}
-
-impl ToSql for GetByQueryParam {
+impl ToSQL for GetByQueryParam {
     fn to_sql(&self) -> String {
         match self {
             GetByQueryParam::Username(username) => format!("users.username = '{}'", username),
@@ -72,9 +29,9 @@ impl ToSql for GetByQueryParam {
             GetByQueryParam::UserSpecs(specs) => format!(
                 "users.user_specs = '{}'",
                 match specs {
-                    UserType::Teacher { subject } => "Teacher",
-                    UserType::Student { class } => "Student",
-                    UserType::Administrator { job_title } => "Administrator",
+                    UserType::Teacher { subject: _ } => "Teacher",
+                    UserType::Student { class: _ } => "Student",
+                    UserType::Administrator { job_title: _ } => "Administrator",
                     UserType::Other => "Other",
                 }
             ),
@@ -101,7 +58,7 @@ impl ChangeQueryParam {
     }
 }
 
-impl ToSql for ChangeQuery {
+impl ToSQL for ChangeQuery {
     fn to_sql(&self) -> String {
         format!(
             "update {} where username= '{}' set {};",
@@ -112,7 +69,7 @@ impl ToSql for ChangeQuery {
     }
 }
 
-impl ToSql for ChangeQueryParam {
+impl ToSQL for ChangeQueryParam {
     fn to_sql(&self) -> String {
         format!(
             "{}.{}",

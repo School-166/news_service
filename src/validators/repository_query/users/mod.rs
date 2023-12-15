@@ -1,8 +1,7 @@
+use crate::{
+    models::user::UserModel, prelude::Validateble, repositories::users::queries::ChangeQueryParam,
+};
 use regex::Regex;
-
-use crate::models::user::UserModel;
-
-use super::{ChangeQueryParam, Validateble};
 
 pub struct ValidatedChangeQueryParam(ChangeQueryParam);
 

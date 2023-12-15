@@ -4,8 +4,14 @@ use handler::users::user_scope;
 use lazy_static::lazy_static;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 
+pub mod controllers;
+pub mod dto;
 mod handler;
-mod models;
+pub mod models;
+pub mod prelude;
+pub mod repositories;
+pub mod types;
+pub mod validators;
 
 lazy_static! {
     static ref DB_POOL: AsyncOnce<PgPool> = AsyncOnce::new(async { establish_connection().await });

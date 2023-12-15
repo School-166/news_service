@@ -1,9 +1,13 @@
+use serde::Deserialize;
+use uuid::Uuid;
+
 pub mod controller;
 
-pub struct PostModel {
-    uuid: String,
-}
+#[derive(Debug, Deserialize, Clone)]
+pub struct Post {}
 
-pub mod Post{
-    
+impl Post {
+    pub fn uuid(&self) -> Uuid {
+        todo!()
+    }
 }

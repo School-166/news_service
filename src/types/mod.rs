@@ -1,7 +1,6 @@
-use std::str::FromStr;
-
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Class {

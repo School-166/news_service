@@ -7,7 +7,7 @@ pub struct ValidatedChangeQueryParam(ChangeQueryParam);
 
 impl Validateble for ChangeQueryParam {
     type Validated = ValidatedChangeQueryParam;
-
+    type Target = UserModel;
     type ValidationError = ValidationError;
 
     fn validate(self, target: &UserModel) -> Result<Self::Validated, Vec<Self::ValidationError>> {

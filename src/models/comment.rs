@@ -1,30 +1,52 @@
 use super::{post::PostModel, user::UserModel};
 use crate::{
+    prelude::{Markable, MarkableFromRow},
     repositories::{
         comments::{CommentFromRow, CommentsRepo, GetCommentQueryParam},
+        marks_repo::{comments::CommentsMarkRepo, MarkAbleRepo},
         posts::{GetPostQueryParam, PostsRepo},
-        users::{queries::GetByQueryParam, UserRepo},
+        users::UserRepo,
     },
     types::EditedState,
 };
 use async_recursion::async_recursion;
 use chrono::NaiveDateTime;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sqlx::types::Uuid;
 use std::str::FromStr;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CommentModel {
     author: UserModel,
     comments: Vec<CommentModel>,
     content: String,
-    dislikes: i64,
+    dislikes: u64,
     edited: EditedState,
-    likes: i64,
+    likes: u64,
     published_at: NaiveDateTime,
     replys_for: Option<String>,
     under_post: PostModel,
     uuid: String,
+}
+
+impl Markable for CommentModel {
+    async fn like(&self, user: UserModel) {
+        CommentsMarkRepo::get_instance()
+            .await
+            .like(user, self.clone())
+            .await
+    }
+
+    async fn dislike(&self, user: UserModel) {
+        CommentsMarkRepo::get_instance()
+            .await
+            .dislike(user, self.clone())
+            .await
+    }
+
+    fn uuid(&self) -> Uuid {
+        self.uuid()
+    }
 }
 
 impl CommentModel {
@@ -41,11 +63,11 @@ impl CommentModel {
             edited: model.edited(),
             author: UserRepo::get_instance()
                 .await
-                .get_one_by(vec![GetByQueryParam::Username(model.author())])
+                .get_by_username(model.author())
                 .await
                 .unwrap(),
-            likes: model.likes(),
-            dislikes: model.dislikes(),
+            likes: model.likes_count().await,
+            dislikes: model.dislikes_count().await,
             comments,
             replys_for: model.replys_for().map(|uuid| uuid.to_string()),
             under_post: PostsRepo::get_instance()

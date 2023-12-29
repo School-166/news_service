@@ -1,3 +1,5 @@
+use uuid::Uuid;
+
 use crate::{
     models::user::{UserModel, UserType},
     prelude::ToSQL,
@@ -6,6 +8,7 @@ use crate::{
 };
 
 pub enum GetByQueryParam {
+    Uuid(Uuid),
     Username(String),
     LastName(String),
     FirstName(String),
@@ -17,6 +20,7 @@ pub enum GetByQueryParam {
 impl ToSQL for GetByQueryParam {
     fn to_sql(&self) -> String {
         match self {
+            GetByQueryParam::Uuid(uuid) => format!("users.uuid = '{}'", uuid),
             GetByQueryParam::Username(username) => format!("users.username = '{}'", username),
             GetByQueryParam::LastName(last_name) => format!("users.last_name = '{}'", last_name),
             GetByQueryParam::FirstName(first_name) => {

@@ -24,7 +24,8 @@ CREATE TYPE subject AS ENUM (
 );
 
 CREATE TABLE users(
-    username NAME PRIMARY KEY NOT NULL UNIQUE,
+    uuid UUID PRIMARY KEY NOT NULL UNIQUE,
+    username NAME NOT NULL UNIQUE,
     about VARCHAR(500) NOT NULL,
     password VARCHAR(24) NOT NULL,
     last_name NAME NOT NULL,
@@ -53,34 +54,38 @@ CREATE TABLE administrators(
 
 CREATE TABLE posts(
     uuid UUID PRIMARY KEY NOT NULL,
-    title_on_russian TEXT NOT NULL,
-    title_on_uzbek TEXT NOT NULL,
-    title_on_english TEXT NOT NULL,
-    content_on_russian TEXT NOT NULL,
-    content_on_uzbek TEXT NOT NULL,
-    content_on_english TEXT NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
     published_at TimeStamp NOT NULL DEFAULT NOW(),
     edited BOOLEAN NOT NULL,
     edited_at TimeStamp,
     written_by NAME NOT NULL REFERENCES users(username),
-    written_on VARCHAR(2),
-    likes BIGINT NOT NULL,
-    dislikes BIGINT NOT NULL
+    tags TEXT[] NOT NULL
+);
+
+CREATE TABLE post_mark(
+    uuid UUID PRIMARY KEY NOT NULL,
+    username TEXT NOT NULL REFERENCES users(username),
+    post UUID NOT NULL REFERENCES posts(uuid),
+    liked BOOLEAN NOT NULL
+);
+
+
+CREATE TABLE comment_mark(
+    uuid UUID PRIMARY KEY NOT NULL,
+    username TEXT NOT NULL REFERENCES users(username),
+    post UUID NOT NULL REFERENCES comments(uuid),
+    liked BOOLEAN NOT NULL
 );
 
 CREATE TABLE comments(
     uuid UUID PRIMARY KEY NOT NULL,
-    written_under UUID NOT NULL REFERNCES posts(uuid),
-    content_on_russian TEXT NOT NULL,
-    content_on_uzbek TEXT NOT NULL,
-    content_on_english TEXT NOT NULL,
+    written_under UUID NOT NULL REFERENCES posts(uuid),
+    content TEXT NOT NULL,
     published_at TimeStamp NOT NULL DEFAULT NOW(),
-    edited BOOLEAN NOT NULL,
-    edited_at TimeStamp,
+    edited BOOLEAN NOT NULL DEFAULT FALSE,
+    edited_at TimeStamp DEFAULT NULL,
     written_by NAME NOT NULL REFERENCES users(username),
-    written_on VARCHAR(2),
-    likes BIGINT NOT NULL,
-    dislikes BIGINT NOT NULL,
     replys_for UUID REFERENCES comments(uuid)
 );
 

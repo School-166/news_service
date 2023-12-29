@@ -1,3 +1,5 @@
+use uuid::Uuid;
+
 use crate::models::user::UserModel;
 
 pub trait QueryInterpreter {
@@ -27,6 +29,20 @@ pub trait ToSQL {
 
 pub trait Validateble {
     type Validated;
+    type Target;
     type ValidationError;
-    fn validate(self, target: &UserModel) -> Result<Self::Validated, Vec<Self::ValidationError>>;
+    fn validate(self, target: &Self::Target)
+        -> Result<Self::Validated, Vec<Self::ValidationError>>;
+}
+
+pub trait Markable {
+    async fn like(&self, user: UserModel);
+    async fn dislike(&self, user: UserModel);
+    fn uuid(&self) -> Uuid;
+}
+
+pub trait MarkableFromRow {
+    async fn likes_count(&self) -> u64;
+    async fn dislikes_count(&self) -> u64;
+    fn uuid(&self) -> Uuid;
 }

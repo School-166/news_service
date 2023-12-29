@@ -2,24 +2,20 @@ use crate::{
     dto::PublishCommentDTO,
     get_db_pool,
     models::{comment::CommentModel, user::UserModel, Commentable, PublishDTOBuilder},
-    prelude::{QueryInterpreter, ToSQL},
-    repositories::users::{queries::GetByQueryParam, UserRepo},
+    prelude::{MarkableFromRow, QueryInterpreter, ToSQL},
+    repositories::users::UserRepo,
     types::EditedState,
 };
-use async_once::AsyncOnce;
-use async_trait::async_trait;
 use chrono::NaiveDateTime;
-use lazy_static::lazy_static;
 use sqlx::{postgres::PgRow, types::Uuid, FromRow, PgPool, Row};
 
-use super::posts::{GetPostQueryParam, PostsRepo};
+use super::{
+    marks_repo::{comments::CommentsMarkRepo, MarkAbleRepo},
+    posts::{GetPostQueryParam, PostsRepo},
+};
 
-lazy_static! {
-    static ref COMMENTS_REPO: AsyncOnce<CommentsRepo> =
-        AsyncOnce::new(async { CommentsRepo(get_db_pool().await) });
-}
-
-pub struct CommentsRepo(&'static PgPool);
+#[derive(Clone)]
+pub struct CommentsRepo(PgPool);
 
 #[derive(Debug)]
 pub enum PublishError {
@@ -28,16 +24,35 @@ pub enum PublishError {
     WrongLanguageCode,
 }
 
+#[derive(Clone)]
 pub struct CommentFromRow {
     uuid: Uuid,
     content: String,
     published_at: NaiveDateTime,
     edited: EditedState,
     author: String,
-    likes: i64,
-    dislikes: i64,
     replys_for: Option<Uuid>,
     under_post: Uuid,
+}
+
+impl MarkableFromRow for CommentFromRow {
+    async fn likes_count(&self) -> u64 {
+        CommentsMarkRepo::get_instance()
+            .await
+            .likes_count(self.clone())
+            .await
+    }
+
+    async fn dislikes_count(&self) -> u64 {
+        CommentsMarkRepo::get_instance()
+            .await
+            .dislikes_count(self.clone())
+            .await
+    }
+
+    fn uuid(&self) -> Uuid {
+        self.uuid.clone()
+    }
 }
 
 impl CommentFromRow {
@@ -57,14 +72,6 @@ impl CommentFromRow {
         self.edited.clone()
     }
 
-    pub fn likes(&self) -> i64 {
-        self.likes
-    }
-
-    pub fn dislikes(&self) -> i64 {
-        self.dislikes
-    }
-
     pub fn published_at(&self) -> NaiveDateTime {
         self.published_at.clone()
     }
@@ -78,7 +85,6 @@ impl CommentFromRow {
     }
 }
 
-#[async_trait]
 impl PublishDTOBuilder for CommentModel {
     async fn build_dto(&self, content: String, author: UserModel) -> PublishCommentDTO {
         PublishCommentDTO {
@@ -97,8 +103,8 @@ impl PublishDTOBuilder for CommentModel {
 impl Commentable for CommentModel {}
 
 impl CommentsRepo {
-    pub async fn get_instance() -> &'static CommentsRepo {
-        COMMENTS_REPO.get().await
+    pub async fn get_instance() -> CommentsRepo {
+        CommentsRepo(get_db_pool().await)
     }
 
     pub async fn publish_comment(
@@ -110,9 +116,7 @@ impl CommentsRepo {
 
         if UserRepo::get_instance()
             .await
-            .get_one_by(vec![GetByQueryParam::Username(
-                comment.author.username().clone(),
-            )])
+            .get_by_uuid(comment.author.uuid())
             .await
             .is_none()
         {
@@ -138,7 +142,7 @@ impl CommentsRepo {
         .bind(comment.content)
         .bind(published_at)
         .bind(comment.author.username())
-        .execute(self.0)
+        .execute(&self.0)
         .await
         .unwrap();
         Ok(self
@@ -158,13 +162,13 @@ impl CommentsRepo {
             r#"
         UPDATE comments
         SET content = $2, edited = true, edited_at = $3
-        WHERE id = $1
+        WHERE id = $1;
         "#,
         )
         .bind(comment.uuid())
         .bind(updated_content)
         .bind(edited_at)
-        .execute(self.0)
+        .execute(&self.0)
         .await?;
 
         Ok(self
@@ -182,7 +186,7 @@ impl CommentsRepo {
 
     pub async fn get_many(&self, query: Vec<GetCommentQueryParam>) -> Vec<CommentModel> {
         let models = sqlx::query_as(&Self::build_sql(query))
-            .fetch_all(self.0)
+            .fetch_all(&self.0)
             .await
             .map_or(Vec::new(), |comments| comments);
         let mut comments = Vec::new();
@@ -239,8 +243,6 @@ impl FromRow<'_, PgRow> for CommentFromRow {
             EditedState::NotEdited
         };
         let author = row.get("written_by");
-        let likes = row.get("likes");
-        let dislikes = row.get("dislikes");
         let replys_for = row.get("reply_to");
         let under_post = row.get("under_post");
         Ok(CommentFromRow {
@@ -249,8 +251,6 @@ impl FromRow<'_, PgRow> for CommentFromRow {
             published_at,
             edited,
             author,
-            likes,
-            dislikes,
             replys_for,
             under_post,
         })

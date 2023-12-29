@@ -1,14 +1,14 @@
-use super::Model;
-use crate::{
-    controllers::users::UserController,
-    types::{Class, Subject},
-};
+use std::str::FromStr;
+
+use crate::types::{Class, Subject};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgRow, FromRow, Row};
+use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct UserModel {
+    uuid: String,
     username: String,
     about: String,
     first_name: String,
@@ -51,6 +51,10 @@ impl UserModel {
     pub fn email(&self) -> String {
         self.email.clone()
     }
+
+    pub fn uuid(&self) -> Uuid {
+        Uuid::from_str(&self.uuid).unwrap()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,17 +95,10 @@ impl UserType {
     }
 }
 
-impl Model for UserModel {
-    type Controller = UserController;
-
-    fn controller(self) -> Self::Controller {
-        UserController::from_model(self)
-    }
-}
-
 impl FromRow<'_, PgRow> for UserModel {
     fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
         Ok(UserModel {
+            uuid: row.get::<Uuid, &str>("uuid").to_string(),
             username: row.get("username"),
             first_name: row.get("first_name"),
             last_name: row.get("last_name"),

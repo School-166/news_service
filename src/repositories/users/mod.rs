@@ -1,61 +1,62 @@
 use self::queries::{ChangeParamsError, ChangeQuery, GetByQueryParam};
 use crate::{
+    dto::UserRegistrationDTO,
     get_db_pool,
     models::user::{UserModel, UserType},
     prelude::{QueryInterpreter, ToSQL},
     types::{Class, Subject},
     validators::repository_query::users::ValidatedChangeQueryParam,
 };
-use async_once::AsyncOnce;
-use core::panic;
-use lazy_static::lazy_static;
+use serde::Serialize;
 use sqlx::{postgres::PgRow, FromRow, PgPool, Row};
 use std::str::FromStr;
+use uuid::Uuid;
 
 pub mod queries;
 
-pub struct UserRepo(&'static PgPool);
+pub struct UserRepo(PgPool);
 
-lazy_static! {
-    static ref USER_REPO: AsyncOnce<UserRepo> =
-        AsyncOnce::new(async { UserRepo(get_db_pool().await) });
-}
-
+#[derive(Serialize)]
 pub enum RegistrationError {
     UsernameAlreadyExists,
     ProblemsWithDB,
     ErrorsOnRegisttrationUserType,
 }
 
-async fn create_user(user_dto: &UserModel, pool: &PgPool) -> Result<(), RegistrationError> {
+async fn create_user(
+    uuid: Uuid,
+    user_dto: &UserRegistrationDTO,
+    pool: &PgPool,
+) -> Result<(), RegistrationError> {
     if !UserRepo::get_instance()
         .await
-        .is_username_free(user_dto.username())
+        .is_username_free(user_dto.username.clone())
         .await
     {
         return Err(RegistrationError::UsernameAlreadyExists);
     }
 
-    let user_type = match user_dto.user_specs() {
-        UserType::Teacher { subject: _ } => "Teacher",
-        UserType::Student { class: _ } => "Student",
-        UserType::Administrator { job_title: _ } => "Administrator",
-        UserType::Other => "Other",
+    let user_type = match user_dto.user_specs {
+        UserType::Teacher { subject: _ } => UserTypeFromRow::Teacher,
+        UserType::Student { class: _ } => UserTypeFromRow::Student,
+        UserType::Administrator { job_title: _ } => UserTypeFromRow::Administrator,
+        UserType::Other => UserTypeFromRow::Other,
     };
 
     let sql = "insert into users 
-                       (username, password, email, first_name, last_name, phone_number, user_type, birth_date, about)
-                    values ($1, $2, $3, $4, $5, $6, $7, $8, $9);";
+                       (uuid, username, password, email, first_name, last_name, phone_number, user_specs, birth_date, about)
+                    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);";
     if sqlx::query(sql)
-        .bind(user_dto.username())
-        .bind(user_dto.password())
-        .bind(user_dto.email())
-        .bind(user_dto.first_name())
-        .bind(user_dto.last_name())
-        .bind(user_dto.phone_number())
+        .bind(uuid)
+        .bind(user_dto.username.clone())
+        .bind(user_dto.password.clone())
+        .bind(user_dto.email.clone())
+        .bind(user_dto.first_name.clone())
+        .bind(user_dto.last_name.clone())
+        .bind(user_dto.phone_number.clone())
         .bind(user_type)
-        .bind(user_dto.birth_date())
-        .bind(user_dto.about())
+        .bind(user_dto.birth_date)
+        .bind(user_dto.about.clone())
         .execute(pool)
         .await
         .is_err()
@@ -65,10 +66,13 @@ async fn create_user(user_dto: &UserModel, pool: &PgPool) -> Result<(), Registra
     Ok(())
 }
 
-async fn create_user_specs(user_dto: &UserModel, pool: &PgPool) -> Result<(), RegistrationError> {
+async fn create_user_specs(
+    user_dto: &UserRegistrationDTO,
+    pool: &PgPool,
+) -> Result<(), RegistrationError> {
     let sql = format!(
         "insert into {};",
-        match user_dto.user_specs() {
+        match user_dto.user_specs {
             UserType::Teacher { subject: _ } => "teachers (username, subject) values ($1, $2)",
             UserType::Student { class: _ } =>
                 "students (username, class_num, class_char) values ($1, $2, $3)",
@@ -77,8 +81,8 @@ async fn create_user_specs(user_dto: &UserModel, pool: &PgPool) -> Result<(), Re
             UserType::Other => return Ok(()),
         }
     );
-    let mut query = sqlx::query(&sql).bind(user_dto.username());
-    query = match user_dto.user_specs() {
+    let mut query = sqlx::query(&sql).bind(user_dto.username.clone());
+    query = match user_dto.user_specs.clone() {
         UserType::Teacher { subject } => query.bind(subject.to_string()),
         UserType::Student { class } => query.bind(class.class_num() as i8).bind(class.class_char()),
         UserType::Administrator { job_title } => query.bind(job_title),
@@ -92,15 +96,32 @@ async fn create_user_specs(user_dto: &UserModel, pool: &PgPool) -> Result<(), Re
 }
 
 impl UserRepo {
-    pub async fn get_instance() -> &'static Self {
-        USER_REPO.get().await
+    pub async fn get_instance() -> Self {
+        UserRepo(get_db_pool().await.clone())
     }
 
-    pub async fn register_user(&self, user_dto: UserModel) -> Result<UserModel, RegistrationError> {
-        create_user(&user_dto, self.0).await?;
-        create_user_specs(&user_dto, self.0).await?;
+    fn pool(&self) -> PgPool {
+        self.0.clone()
+    }
+
+    pub async fn get_by_uuid(&self, uuid: Uuid) -> Option<UserModel> {
+        self.get_one_by(vec![GetByQueryParam::Uuid(uuid)]).await
+    }
+
+    pub async fn get_by_username(&self, username: String) -> Option<UserModel> {
+        self.get_one_by(vec![GetByQueryParam::Username(username)])
+            .await
+    }
+
+    pub async fn register_user(
+        &self,
+        user_dto: UserRegistrationDTO,
+    ) -> Result<UserModel, RegistrationError> {
+        let uuid = Uuid::new_v4();
+        create_user(uuid.clone(), &user_dto, &self.pool()).await?;
+        create_user_specs(&user_dto, &self.pool()).await?;
         Ok(self
-            .get_one_by(vec![GetByQueryParam::Username(user_dto.username())])
+            .get_one_by(vec![GetByQueryParam::Uuid(uuid)])
             .await
             .expect("unreacheble"))
     }
@@ -114,7 +135,7 @@ impl UserRepo {
 
     pub async fn get_many_by(&self, params: Vec<GetByQueryParam>) -> Vec<UserModel> {
         match sqlx::query_as::<_, UserModel>(&Self::build_sql(params))
-            .fetch_all(self.0)
+            .fetch_all(&self.pool())
             .await
         {
             Ok(users) => users,
@@ -138,8 +159,8 @@ impl UserRepo {
         }
 
         for param in params {
-            sqlx::query(&ChangeQuery::new(&model, param).to_sql())
-                .execute(self.0)
+            let _ = sqlx::query(&ChangeQuery::new(&model, param).to_sql())
+                .execute(&self.pool())
                 .await;
         }
         Ok(())
@@ -156,12 +177,12 @@ impl QueryInterpreter for UserRepo {
 
 impl FromRow<'_, PgRow> for UserType {
     fn from_row(row: &'_ PgRow) -> Result<Self, sqlx::Error> {
-        let user_specs: &str = row.get("user_specs");
+        let user_specs = row.get("user_specs");
         Ok(match user_specs {
-            "Teacher" => UserType::Teacher {
+            UserTypeFromRow::Teacher => UserType::Teacher {
                 subject: Subject::from_str(row.get("subject")).unwrap(),
             },
-            "Student" => UserType::Student {
+            UserTypeFromRow::Student => UserType::Student {
                 class: Class::from(
                     *{
                         let class_char: String = row.get("class_char");
@@ -180,11 +201,19 @@ impl FromRow<'_, PgRow> for UserType {
                 )
                 .unwrap(),
             },
-            "Administrator" => UserType::Administrator {
+            UserTypeFromRow::Administrator => UserType::Administrator {
                 job_title: row.get("job_title"),
             },
-            "Other" => UserType::Other,
-            _ => panic!("Enum can't contain this value"),
+            UserTypeFromRow::Other => UserType::Other,
         })
     }
+}
+
+#[derive(sqlx::Type)]
+#[sqlx(type_name = "user_specs")]
+enum UserTypeFromRow {
+    Student,
+    Administrator,
+    Teacher,
+    Other,
 }

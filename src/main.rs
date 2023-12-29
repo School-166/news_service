@@ -2,6 +2,7 @@ use actix_web::{App, HttpServer};
 use async_once::AsyncOnce;
 use handler::users::user_scope;
 use lazy_static::lazy_static;
+use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use sqlx::{postgres::PgPoolOptions, PgPool};
 
 pub mod controllers;
@@ -22,20 +23,27 @@ lazy_static! {
     static ref DB_ADDRES: String = dotenv::var("DB_ADDRES").expect("DB_ADDRES must be set");
 }
 
-pub async fn get_db_pool() -> &'static PgPool {
-    DB_POOL.get().await
+pub async fn get_db_pool() -> PgPool {
+    DB_POOL.get().await.clone()
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| App::new().service(user_scope()))
-        .bind(("", PORT.to_owned()))?
-        .run()
-        .await
+    let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
+    builder
+        .set_private_key_file("key.pem", SslFiletype::PEM)
+        .unwrap();
+    builder.set_certificate_chain_file("cert.pem").unwrap();
+    HttpServer::new(|| {
+        println!("started");
+        App::new().service(user_scope())
+    })
+    .bind_openssl("127.0.0.1:8080", builder)?
+    .run()
+    .await
 }
 pub async fn establish_connection() -> PgPool {
     PgPoolOptions::new()
-        .max_connections(5)
         .connect(&DB_ADDRES)
         .await
         .expect("maybe path to database wrong")

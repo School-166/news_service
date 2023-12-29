@@ -1,13 +1,29 @@
+use actix_web::{get, Responder};
 use serde::Deserialize;
-use uuid::Uuid;
 
-pub mod controller;
+#[derive(Deserialize)]
+struct SearchQueryParams {
+    limit: Option<u8>,
+    page: u32,
+    tags: Vec<String>,
+    sort_by: Option<SortBy>,
+    direction: Option<SortDirection>,
+}
 
-#[derive(Debug, Deserialize, Clone)]
-pub struct Post {}
+#[derive(Deserialize)]
+enum SortDirection {
+    Increment,
+    Decrement,
+}
 
-impl Post {
-    pub fn uuid(&self) -> Uuid {
-        todo!()
-    }
+#[derive(Deserialize)]
+enum SortBy {
+    Popularity,
+    TimeOfRelease,
+    Raiting,
+}
+
+#[get("/search")]
+async fn search(query: actix_web::web::Query<SearchQueryParams>) -> impl Responder {
+    todo!()
 }

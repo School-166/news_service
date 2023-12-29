@@ -4,5 +4,5 @@ pub mod users;
 
 pub trait Controller {
     type Model;
-    async fn model(&self) -> Self::Model;
+    fn model(&self) -> impl std::future::Future<Output = Self::Model> + Send;
 }

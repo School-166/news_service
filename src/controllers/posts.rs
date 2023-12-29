@@ -1,7 +1,7 @@
 use super::Controller;
 use crate::{
     models::{post::PostModel, Model},
-    repositories::posts::{GetPostQueryParam, PostsRepo},
+    repositories::posts::PostsRepo,
 };
 use uuid::Uuid;
 
@@ -15,7 +15,7 @@ impl Controller for PostController {
     async fn model(&self) -> Self::Model {
         PostsRepo::get_instance()
             .await
-            .get_one(vec![GetPostQueryParam::ByUuid(self.uuid.clone())])
+            .get_by_uuid(self.uuid.clone())
             .await
             .unwrap()
     }

@@ -1,12 +1,11 @@
 use super::*;
-use crate::{get_db_pool, models::post::PostModel, repositories::posts::PostFromRow};
+use crate::{get_db_pool, models::post::PostModel};
 use sqlx::PgPool;
 
 pub struct PostsMarkRepo(PgPool);
 
 impl MarkableRepoMethods for PostsMarkRepo {
     type Markable = PostModel;
-    type FromRowModel = PostFromRow;
     fn pool(&self) -> &PgPool {
         &self.0
     }

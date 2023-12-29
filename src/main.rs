@@ -12,6 +12,7 @@ pub mod models;
 pub mod prelude;
 pub mod repositories;
 pub mod types;
+pub mod utils;
 pub mod validators;
 
 lazy_static! {

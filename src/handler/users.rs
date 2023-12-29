@@ -4,7 +4,7 @@ use crate::{
     models::Model,
     repositories::{
         comments::{CommentsRepo, GetCommentQueryParam},
-        posts::{GetPostQueryParam, PostsRepo},
+        posts::PostsRepo,
         users::UserRepo,
     },
 };
@@ -67,13 +67,7 @@ async fn publish_post(
         },
         None => return HttpResponse::NotFound().finish(),
     };
-    HttpResponse::Created().json(
-        PostsRepo::get_instance()
-            .await
-            .publish_post(dto)
-            .await
-            .unwrap(),
-    )
+    HttpResponse::Created().json(PostsRepo::get_instance().await.publish(dto).await.unwrap())
 }
 
 #[derive(Serialize)]
@@ -99,7 +93,7 @@ async fn like_comment(path: Path<(String, String)>) -> impl Responder {
     };
     let comment = match CommentsRepo::get_instance()
         .await
-        .get_one(vec![GetCommentQueryParam::ByUuid(comment)])
+        .get_one(vec![GetCommentQueryParam::Uuid(comment)])
         .await
     {
         Some(comment) => comment,
@@ -126,7 +120,7 @@ async fn dislike_comment(path: Path<(String, String)>) -> impl Responder {
     };
     let comment = match CommentsRepo::get_instance()
         .await
-        .get_one(vec![GetCommentQueryParam::ByUuid(comment)])
+        .get_one(vec![GetCommentQueryParam::Uuid(comment)])
         .await
     {
         Some(comment) => comment,
@@ -151,11 +145,7 @@ async fn like_post(path: Path<(String, String)>) -> impl Responder {
         Ok(uuid) => uuid,
         Err(_) => return HttpResponse::BadRequest().finish(),
     };
-    let post = match PostsRepo::get_instance()
-        .await
-        .get_one(vec![GetPostQueryParam::ByUuid(post)])
-        .await
-    {
+    let post = match PostsRepo::get_instance().await.get_by_uuid(post).await {
         Some(post) => post,
         None => return HttpResponse::NotFound().json(MarkErrors::MarkableNotFound),
     };
@@ -178,11 +168,7 @@ async fn dislike_post(path: Path<(String, String)>) -> impl Responder {
         Ok(uuid) => uuid,
         Err(_) => return HttpResponse::BadRequest().finish(),
     };
-    let post = match PostsRepo::get_instance()
-        .await
-        .get_one(vec![GetPostQueryParam::ByUuid(post)])
-        .await
-    {
+    let post = match PostsRepo::get_instance().await.get_by_uuid(post).await {
         Some(post) => post,
         None => return HttpResponse::NotFound().json(MarkErrors::MarkableNotFound),
     };
@@ -213,7 +199,7 @@ async fn comment_comment(path: Path<(String, String)>, json: Json<CommentJSON>) 
     };
     let comment = match CommentsRepo::get_instance()
         .await
-        .get_one(vec![GetCommentQueryParam::ByUuid(comment)])
+        .get_one(vec![GetCommentQueryParam::Uuid(comment)])
         .await
     {
         Some(comment) => comment,
@@ -239,11 +225,7 @@ async fn comment_post(path: Path<(String, String)>, json: Json<CommentJSON>) -> 
         Ok(uuid) => uuid,
         Err(_) => return HttpResponse::BadRequest().finish(),
     };
-    let post = match PostsRepo::get_instance()
-        .await
-        .get_one(vec![GetPostQueryParam::ByUuid(post)])
-        .await
-    {
+    let post = match PostsRepo::get_instance().await.get_by_uuid(post).await {
         Some(post) => post,
         None => return HttpResponse::NotFound().json(MarkErrors::MarkableNotFound),
     };

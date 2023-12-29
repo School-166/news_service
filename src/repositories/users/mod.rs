@@ -3,8 +3,9 @@ use crate::{
     dto::UserRegistrationDTO,
     get_db_pool,
     models::user::{UserModel, UserType},
-    prelude::{QueryInterpreter, ToSQL},
+    prelude::ToSQL,
     types::{Class, Subject},
+    utils::sql::SelectRequestBuilder,
     validators::repository_query::users::ValidatedChangeQueryParam,
 };
 use serde::Serialize;
@@ -43,11 +44,10 @@ async fn create_user(
         UserType::Other => UserTypeFromRow::Other,
     };
 
-    let sql = "insert into users 
+    let sql = format!("insert into users 
                        (uuid, username, password, email, first_name, last_name, phone_number, user_specs, birth_date, about)
-                    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);";
-    if sqlx::query(sql)
-        .bind(uuid)
+                    values (\'{}\', $1, $2, $3, $4, $5, $6, $7, $8, $9);", uuid);
+    sqlx::query(&sql)
         .bind(user_dto.username.clone())
         .bind(user_dto.password.clone())
         .bind(user_dto.email.clone())
@@ -59,10 +59,7 @@ async fn create_user(
         .bind(user_dto.about.clone())
         .execute(pool)
         .await
-        .is_err()
-    {
-        return Err(RegistrationError::ProblemsWithDB);
-    }
+        .expect("error in sql");
     Ok(())
 }
 
@@ -134,7 +131,31 @@ impl UserRepo {
     }
 
     pub async fn get_many_by(&self, params: Vec<GetByQueryParam>) -> Vec<UserModel> {
-        match sqlx::query_as::<_, UserModel>(&Self::build_sql(params))
+        let sql = SelectRequestBuilder::<(), GetByQueryParam>::new(
+            "select   
+                 users.uuid,
+                 users.username,
+                 users.password,
+                 users.email,
+                 users.first_name,
+                 users.last_name,
+                 users.phone_number,
+                 users.user_specs,
+                 users.birth_date,
+                 users.about,
+                students.class_num,
+                students.class_char,
+                teachers.subject,
+                administrators.job_title from users
+            left outer join students on users.username = students.username 
+            left outer join teachers on users.username = teachers.username 
+            left outer join administrators on users.username = administrators.username"
+                .to_string(),
+            params,
+        )
+        .build();
+
+        match sqlx::query_as::<_, UserModel>(&sql)
             .fetch_all(&self.pool())
             .await
         {
@@ -164,14 +185,6 @@ impl UserRepo {
                 .await;
         }
         Ok(())
-    }
-}
-
-impl QueryInterpreter for UserRepo {
-    type Query = GetByQueryParam;
-
-    fn query() -> String {
-        "select * from users".to_string()
     }
 }
 

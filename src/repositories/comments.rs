@@ -1,18 +1,15 @@
+use super::posts::PostsRepo;
 use crate::{
     dto::PublishCommentDTO,
     get_db_pool,
     models::{comment::CommentModel, user::UserModel, Commentable, PublishDTOBuilder},
-    prelude::{MarkableFromRow, QueryInterpreter, ToSQL},
+    prelude::ToSQL,
     repositories::users::UserRepo,
     types::EditedState,
+    utils::sql::SelectRequestBuilder,
 };
 use chrono::NaiveDateTime;
 use sqlx::{postgres::PgRow, types::Uuid, FromRow, PgPool, Row};
-
-use super::{
-    marks_repo::{comments::CommentsMarkRepo, MarkAbleRepo},
-    posts::{GetPostQueryParam, PostsRepo},
-};
 
 #[derive(Clone)]
 pub struct CommentsRepo(PgPool);
@@ -33,26 +30,8 @@ pub struct CommentFromRow {
     author: String,
     replys_for: Option<Uuid>,
     under_post: Uuid,
-}
-
-impl MarkableFromRow for CommentFromRow {
-    async fn likes_count(&self) -> u64 {
-        CommentsMarkRepo::get_instance()
-            .await
-            .likes_count(self.clone())
-            .await
-    }
-
-    async fn dislikes_count(&self) -> u64 {
-        CommentsMarkRepo::get_instance()
-            .await
-            .dislikes_count(self.clone())
-            .await
-    }
-
-    fn uuid(&self) -> Uuid {
-        self.uuid.clone()
-    }
+    likes: i64,
+    dislikes: i64,
 }
 
 impl CommentFromRow {
@@ -83,6 +62,13 @@ impl CommentFromRow {
     pub fn under_post(&self) -> Uuid {
         self.under_post.clone()
     }
+
+    pub fn likes_count(&self) -> u64 {
+        self.likes as u64
+    }
+    pub fn dislikes_count(&self) -> u64 {
+        self.dislikes as u64
+    }
 }
 
 impl PublishDTOBuilder for CommentModel {
@@ -92,7 +78,7 @@ impl PublishDTOBuilder for CommentModel {
             author,
             for_post: PostsRepo::get_instance()
                 .await
-                .get_one(vec![GetPostQueryParam::ByUuid(self.under_post().uuid())])
+                .get_by_uuid(self.under_post().uuid())
                 .await
                 .unwrap(),
             replys_for: Some(self.clone()),
@@ -146,7 +132,7 @@ impl CommentsRepo {
         .await
         .unwrap();
         Ok(self
-            .get_one(vec![GetCommentQueryParam::ByUuid(uuid)])
+            .get_one(vec![GetCommentQueryParam::Uuid(uuid)])
             .await
             .unwrap())
     }
@@ -172,7 +158,7 @@ impl CommentsRepo {
         .await?;
 
         Ok(self
-            .get_one(vec![GetCommentQueryParam::ByUuid(comment.uuid())])
+            .get_one(vec![GetCommentQueryParam::Uuid(comment.uuid())])
             .await
             .unwrap())
     }
@@ -185,7 +171,39 @@ impl CommentsRepo {
     }
 
     pub async fn get_many(&self, query: Vec<GetCommentQueryParam>) -> Vec<CommentModel> {
-        let models = sqlx::query_as(&Self::build_sql(query))
+        let sql = SelectRequestBuilder::<(), _>::new(
+            "select 
+                            comments.uuid,
+                            comments.written_under,
+                            comments.content,
+                            comments.published_at,
+                            comments.edited,
+                            comments.edited_at,
+                            comments.author,
+                            comments.replys_for,
+                                        
+                count(comment_mark.liked = true) as likes,                  
+                count(comment_mark.liked = false) as dislikes
+             from comments join comment_mark on comments.uuid = comment_marks.comment"
+                .to_string(),
+            query,
+        )
+        .group_by(
+            "comments.uuid,
+             comments.written_under,
+             comments.content,
+             comments.published_at,
+             comments.edited,
+             comments.edited_at,
+             comments.author,
+             comments.replys_for
+                                        
+            "
+            .to_string(),
+        )
+        .build();
+
+        let models = sqlx::query_as(&sql)
             .fetch_all(&self.0)
             .await
             .map_or(Vec::new(), |comments| comments);
@@ -198,34 +216,26 @@ impl CommentsRepo {
 }
 
 pub enum GetCommentQueryParam {
-    ByUuid(Uuid),
-    ForPost(Uuid),
-    WithReplies(Uuid),
-    ByUser(String),
-}
-
-impl QueryInterpreter for CommentsRepo {
-    type Query = GetCommentQueryParam;
-
-    fn query() -> String {
-        "select * from comments where ".to_string()
-    }
+    Uuid(Uuid),
+    Post(Uuid),
+    Replies(Uuid),
+    User(String),
 }
 
 impl ToSQL for GetCommentQueryParam {
     fn to_sql(&self) -> String {
         match self {
-            GetCommentQueryParam::ByUuid(uuid) => {
+            GetCommentQueryParam::Uuid(uuid) => {
                 format!("uuid = '{}'", uuid)
             }
-            GetCommentQueryParam::ForPost(post_uuid) => {
+            GetCommentQueryParam::Post(post_uuid) => {
                 format!("written_under = '{}'", post_uuid)
             }
-            GetCommentQueryParam::WithReplies(comment_uuid) => {
-                format!("uuid = '{}'", comment_uuid)
+            GetCommentQueryParam::Replies(comment_uuid) => {
+                format!("replys_for = '{}'", comment_uuid)
             }
-            GetCommentQueryParam::ByUser(username) => {
-                format!("written_by = '{}'", username)
+            GetCommentQueryParam::User(username) => {
+                format!("author = '{}'", username)
             }
         }
     }
@@ -253,6 +263,8 @@ impl FromRow<'_, PgRow> for CommentFromRow {
             author,
             replys_for,
             under_post,
+            likes: row.get("likes"),
+            dislikes: row.get("dislikes"),
         })
     }
 }

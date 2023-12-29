@@ -1,7 +1,4 @@
-use crate::{
-    models::user::UserModel,
-    prelude::{Markable, MarkableFromRow},
-};
+use crate::{models::user::UserModel, prelude::Markable};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
@@ -10,7 +7,6 @@ pub mod posts;
 
 pub trait MarkableRepoMethods {
     type Markable: Clone + Send + Markable + Sync;
-    type FromRowModel: Clone + Send + MarkableFromRow + Sync;
 
     fn pool(&self) -> &PgPool;
     fn table() -> String;
@@ -86,21 +82,6 @@ pub trait MarkableRepoMethods {
             .get::<i32, &str>("count(*)")
             != 0
     }
-
-    async fn get_marks_count(&self, markable: Self::FromRowModel, liked: bool) -> i64 {
-        let sql = format!(
-            "select count(*) from {} where {} = $1 and liked = $2;",
-            Self::table(),
-            Self::markable_column()
-        );
-        sqlx::query(&sql)
-            .bind(markable.uuid())
-            .bind(liked)
-            .fetch_one(self.pool())
-            .await
-            .unwrap()
-            .get("count(*)")
-    }
 }
 
 pub trait MarkAbleRepo: MarkableRepoMethods + Sync {
@@ -122,15 +103,7 @@ pub trait MarkAbleRepo: MarkableRepoMethods + Sync {
         self.is_marked_by(user, markable, Some(false)).await
     }
 
-    async fn likes_count(&self, markable: Self::FromRowModel) -> u64 {
-        self.get_marks_count(markable, true).await as u64
-    }
-
     async fn cancel_mark(&self, user: UserModel, markable: Self::Markable) -> Result<(), ()> {
         self.cancel_mark_method(user, markable).await
-    }
-
-    async fn dislikes_count(&self, markable: Self::FromRowModel) -> u64 {
-        self.get_marks_count(markable, false).await as u64
     }
 }

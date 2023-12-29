@@ -59,8 +59,20 @@ CREATE TABLE posts(
     published_at TimeStamp NOT NULL DEFAULT NOW(),
     edited BOOLEAN NOT NULL,
     edited_at TimeStamp,
-    written_by NAME NOT NULL REFERENCES users(username),
+    author NAME NOT NULL REFERENCES users(username),
     tags TEXT[] NOT NULL
+);
+
+
+CREATE TABLE comments(
+    uuid UUID PRIMARY KEY NOT NULL,
+    written_under UUID NOT NULL REFERENCES posts(uuid),
+    content TEXT NOT NULL,
+    published_at TimeStamp NOT NULL DEFAULT NOW(),
+    edited BOOLEAN NOT NULL DEFAULT FALSE,
+    edited_at TimeStamp DEFAULT NULL,
+    author NAME NOT NULL REFERENCES users(username),
+    replys_for UUID REFERENCES comments(uuid)
 );
 
 CREATE TABLE post_mark(
@@ -74,18 +86,7 @@ CREATE TABLE post_mark(
 CREATE TABLE comment_mark(
     uuid UUID PRIMARY KEY NOT NULL,
     username TEXT NOT NULL REFERENCES users(username),
-    post UUID NOT NULL REFERENCES comments(uuid),
+    comment UUID NOT NULL REFERENCES comments(uuid),
     liked BOOLEAN NOT NULL
-);
-
-CREATE TABLE comments(
-    uuid UUID PRIMARY KEY NOT NULL,
-    written_under UUID NOT NULL REFERENCES posts(uuid),
-    content TEXT NOT NULL,
-    published_at TimeStamp NOT NULL DEFAULT NOW(),
-    edited BOOLEAN NOT NULL DEFAULT FALSE,
-    edited_at TimeStamp DEFAULT NULL,
-    written_by NAME NOT NULL REFERENCES users(username),
-    replys_for UUID REFERENCES comments(uuid)
 );
 

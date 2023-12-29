@@ -13,6 +13,7 @@ pub struct UserModel {
     about: String,
     first_name: String,
     last_name: String,
+    #[serde(skip)]
     password: String,
     email: String,
     phone_number: Option<String>,

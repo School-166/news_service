@@ -1,12 +1,11 @@
 use super::*;
-use crate::{get_db_pool, models::comment::CommentModel, repositories::comments::CommentFromRow};
+use crate::{get_db_pool, models::comment::CommentModel};
 use sqlx::PgPool;
 
 pub struct CommentsMarkRepo(PgPool);
 
 impl MarkableRepoMethods for CommentsMarkRepo {
     type Markable = CommentModel;
-    type FromRowModel = CommentFromRow;
     fn pool(&self) -> &PgPool {
         &self.0
     }

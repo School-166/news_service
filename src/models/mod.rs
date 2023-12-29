@@ -14,15 +14,21 @@ pub trait Model {
 }
 
 pub trait PublishDTOBuilder {
-    async fn build_dto(&self, content: String, author: UserModel) -> PublishCommentDTO;
+    fn build_dto(
+        &self,
+        content: String,
+        author: UserModel,
+    ) -> impl std::future::Future<Output = PublishCommentDTO> + Send;
 }
 
 pub trait Commentable: PublishDTOBuilder {
-    async fn comment(&self, content: String, author: UserModel) {
-        CommentsRepo::get_instance()
-            .await
-            .publish_comment(self.build_dto(content, author).await)
-            .await
-            .unwrap();
+    fn comment(&self, content: String, author: UserModel) -> impl std::future::Future<Output = ()> {
+        async {
+            CommentsRepo::get_instance()
+                .await
+                .publish_comment(self.build_dto(content, author).await)
+                .await
+                .unwrap();
+        }
     }
 }

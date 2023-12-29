@@ -1,7 +1,7 @@
 use super::{comment::CommentModel, user::UserModel, Commentable, PublishDTOBuilder};
 use crate::{
     dto::PublishCommentDTO,
-    prelude::{Markable, MarkableFromRow},
+    prelude::Markable,
     repositories::{
         comments::{CommentsRepo, GetCommentQueryParam},
         marks_repo::{posts::PostsMarkRepo, MarkAbleRepo},
@@ -27,6 +27,7 @@ pub struct PostModel {
     dislikes: u64,
     comments: Vec<CommentModel>,
     tags: Vec<String>,
+    raiting: f32,
 }
 
 impl Markable for PostModel {
@@ -75,13 +76,14 @@ impl PostModel {
             published_at: from_row_model.published_at(),
             edited: from_row_model.edited_state(),
             author: from_row_model.author(),
-            likes: from_row_model.likes_count().await,
-            dislikes: from_row_model.dislikes_count().await,
+            likes: from_row_model.likes_count(),
+            dislikes: from_row_model.dislikes_count(),
             comments: CommentsRepo::get_instance()
                 .await
-                .get_many(vec![GetCommentQueryParam::ForPost(from_row_model.uuid())])
+                .get_many(vec![GetCommentQueryParam::Post(from_row_model.uuid())])
                 .await,
             tags: from_row_model.tags(),
+            raiting: from_row_model.raiting(),
         }
     }
 

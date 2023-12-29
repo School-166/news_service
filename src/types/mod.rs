@@ -8,10 +8,21 @@ pub struct Class {
     class_num: u8,
 }
 
+pub struct Limit {
+    pub limit: u32,
+    pub offset: Option<u32>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum EditedState {
     Edited { edited_at: NaiveDateTime },
     NotEdited,
+}
+
+#[derive(Deserialize)]
+pub enum SortDirection {
+    Increment,
+    Decrement,
 }
 
 impl EditedState {

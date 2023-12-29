@@ -1,10 +1,10 @@
 use super::{post::PostModel, user::UserModel};
 use crate::{
-    prelude::{Markable, MarkableFromRow},
+    prelude::Markable,
     repositories::{
         comments::{CommentFromRow, CommentsRepo, GetCommentQueryParam},
         marks_repo::{comments::CommentsMarkRepo, MarkAbleRepo},
-        posts::{GetPostQueryParam, PostsRepo},
+        posts::PostsRepo,
         users::UserRepo,
     },
     types::EditedState,
@@ -54,7 +54,7 @@ impl CommentModel {
     pub async fn from_row(model: CommentFromRow) -> CommentModel {
         let comments = CommentsRepo::get_instance()
             .await
-            .get_many(vec![GetCommentQueryParam::WithReplies(model.uuid())])
+            .get_many(vec![GetCommentQueryParam::Replies(model.uuid())])
             .await;
         CommentModel {
             uuid: model.uuid().to_string(),
@@ -66,13 +66,13 @@ impl CommentModel {
                 .get_by_username(model.author())
                 .await
                 .unwrap(),
-            likes: model.likes_count().await,
-            dislikes: model.dislikes_count().await,
+            likes: model.likes_count(),
+            dislikes: model.dislikes_count(),
             comments,
             replys_for: model.replys_for().map(|uuid| uuid.to_string()),
             under_post: PostsRepo::get_instance()
                 .await
-                .get_one(vec![GetPostQueryParam::ByUuid(model.under_post())])
+                .get_by_uuid(model.under_post())
                 .await
                 .unwrap(),
         }

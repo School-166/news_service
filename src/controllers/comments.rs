@@ -15,7 +15,7 @@ impl Controller for CommentController {
     async fn model(&self) -> Self::Model {
         CommentsRepo::get_instance()
             .await
-            .get_one(vec![GetCommentQueryParam::ByUuid(self.uuid.clone())])
+            .get_one(vec![GetCommentQueryParam::Uuid(self.uuid.clone())])
             .await
             .unwrap()
     }

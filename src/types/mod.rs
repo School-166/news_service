@@ -19,7 +19,7 @@ pub enum EditedState {
     NotEdited,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub enum SortDirection {
     Increment,
     Decrement,

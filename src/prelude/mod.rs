@@ -18,7 +18,7 @@ where
     T: ToSQL,
 {
     Up(T),
-    Right(T),
+    Down(T),
 }
 
 impl<T> ToSQL for OrderingDirection<T>
@@ -28,7 +28,7 @@ where
     fn to_sql(&self) -> String {
         match self {
             OrderingDirection::Up(order) => format!("{} desc", order.to_sql()),
-            OrderingDirection::Right(order) => format!("{} asc", order.to_sql()),
+            OrderingDirection::Down(order) => format!("{} asc", order.to_sql()),
         }
     }
 }

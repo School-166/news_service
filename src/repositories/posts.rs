@@ -173,7 +173,7 @@ pub enum GetPostQueryParam {
     Tags(Vec<String>),
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub enum OrderParam {
     Raiting,
     ReleaseTime,

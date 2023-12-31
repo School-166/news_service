@@ -1,10 +1,7 @@
-use super::{comment::CommentModel, user::UserModel, Commentable, PublishDTOBuilder};
+use super::{comment::CommentModel, user::UserModel};
 use crate::{
-    dto::PublishCommentDTO,
-    prelude::Markable,
     repositories::{
         comments::{CommentsRepo, GetCommentQueryParam},
-        marks_repo::{posts::PostsMarkRepo, MarkAbleRepo},
         posts::PostFromRow,
         users::{queries::GetByQueryParam, UserRepo},
     },
@@ -29,39 +26,6 @@ pub struct PostModel {
     tags: Vec<String>,
     raiting: f32,
 }
-
-impl Markable for PostModel {
-    async fn like(&self, user: UserModel) {
-        PostsMarkRepo::get_instance()
-            .await
-            .like(user, self.clone())
-            .await
-    }
-
-    async fn dislike(&self, user: UserModel) {
-        PostsMarkRepo::get_instance()
-            .await
-            .dislike(user, self.clone())
-            .await
-    }
-
-    fn uuid(&self) -> Uuid {
-        PostModel::uuid(self)
-    }
-}
-
-impl PublishDTOBuilder for PostModel {
-    async fn build_dto(&self, content: String, author: UserModel) -> PublishCommentDTO {
-        PublishCommentDTO {
-            content,
-            author,
-            replys_for: None,
-            for_post: self.clone(),
-        }
-    }
-}
-
-impl Commentable for PostModel {}
 
 impl PostModel {
     pub fn uuid(&self) -> Uuid {

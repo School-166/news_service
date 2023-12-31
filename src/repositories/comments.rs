@@ -2,14 +2,11 @@ use super::posts::PostsRepo;
 use crate::{
     dto::PublishCommentDTO,
     get_db_pool,
-    models::{comment::CommentModel, user::UserModel, Commentable, PublishDTOBuilder},
-    prelude::ToSQL,
-    repositories::users::UserRepo,
-    types::EditedState,
+    models::{comment::CommentModel, user::UserModel},
+    prelude::{Commentable, PublishDTOBuilder, ToSQL},
     utils::sql::SelectRequestBuilder,
 };
-use chrono::NaiveDateTime;
-use sqlx::{postgres::PgRow, types::Uuid, FromRow, PgPool, Row};
+use sqlx::{types::Uuid, PgPool};
 
 #[derive(Clone)]
 pub struct CommentsRepo(PgPool);
@@ -19,56 +16,6 @@ pub enum PublishError {
     WrittenByNoone,
     WrittenUnderUnexistedPost,
     WrongLanguageCode,
-}
-
-#[derive(Clone)]
-pub struct CommentFromRow {
-    uuid: Uuid,
-    content: String,
-    published_at: NaiveDateTime,
-    edited: EditedState,
-    author: String,
-    replys_for: Option<Uuid>,
-    under_post: Uuid,
-    likes: i64,
-    dislikes: i64,
-}
-
-impl CommentFromRow {
-    pub fn uuid(&self) -> Uuid {
-        self.uuid.clone()
-    }
-
-    pub fn content(&self) -> String {
-        self.content.clone()
-    }
-
-    pub fn author(&self) -> String {
-        self.author.clone()
-    }
-
-    pub fn edited(&self) -> EditedState {
-        self.edited.clone()
-    }
-
-    pub fn published_at(&self) -> NaiveDateTime {
-        self.published_at.clone()
-    }
-
-    pub fn replys_for(&self) -> Option<Uuid> {
-        self.replys_for.clone()
-    }
-
-    pub fn under_post(&self) -> Uuid {
-        self.under_post.clone()
-    }
-
-    pub fn likes_count(&self) -> u64 {
-        self.likes as u64
-    }
-    pub fn dislikes_count(&self) -> u64 {
-        self.dislikes as u64
-    }
 }
 
 impl PublishDTOBuilder for CommentModel {
@@ -100,15 +47,6 @@ impl CommentsRepo {
         let uuid = Uuid::new_v4();
         let published_at = chrono::Utc::now();
 
-        if UserRepo::get_instance()
-            .await
-            .get_by_uuid(comment.author.uuid())
-            .await
-            .is_none()
-        {
-            return Err(PublishError::WrittenByNoone);
-        }
-
         sqlx::query(
             r#"
         INSERT INTO comments (
@@ -131,10 +69,7 @@ impl CommentsRepo {
         .execute(&self.0)
         .await
         .unwrap();
-        Ok(self
-            .get_one(vec![GetCommentQueryParam::Uuid(uuid)])
-            .await
-            .unwrap())
+        Ok(self.get_by_uuid(uuid).await.unwrap())
     }
 
     pub async fn edit_comment(
@@ -157,17 +92,7 @@ impl CommentsRepo {
         .execute(&self.0)
         .await?;
 
-        Ok(self
-            .get_one(vec![GetCommentQueryParam::Uuid(comment.uuid())])
-            .await
-            .unwrap())
-    }
-
-    pub async fn get_one(&self, query: Vec<GetCommentQueryParam>) -> Option<CommentModel> {
-        self.get_many(query)
-            .await
-            .first()
-            .map_or(None, |comment| Some((*comment).clone()))
+        Ok(self.get_by_uuid(comment.uuid()).await.unwrap())
     }
 
     pub async fn get_many(&self, query: Vec<GetCommentQueryParam>) -> Vec<CommentModel> {
@@ -203,15 +128,22 @@ impl CommentsRepo {
         )
         .build();
 
-        let models = sqlx::query_as(&sql)
+        let rows = sqlx::query(&sql)
             .fetch_all(&self.0)
             .await
             .map_or(Vec::new(), |comments| comments);
         let mut comments = Vec::new();
-        for model in models {
+        for model in rows {
             comments.push(CommentModel::from_row(model).await)
         }
         comments
+    }
+
+    pub async fn get_by_uuid(&self, uuid: Uuid) -> Option<CommentModel> {
+        self.get_many(vec![GetCommentQueryParam::Uuid(uuid)])
+            .await
+            .first()
+            .map_or(None, |comment| Some((*comment).clone()))
     }
 }
 
@@ -238,33 +170,5 @@ impl ToSQL for GetCommentQueryParam {
                 format!("author = '{}'", username)
             }
         }
-    }
-}
-
-impl FromRow<'_, PgRow> for CommentFromRow {
-    fn from_row(row: &'_ PgRow) -> Result<Self, sqlx::Error> {
-        let content = row.get("content");
-        let published_at = row.get("published_at");
-        let edited = if row.get::<bool, &str>("edited") {
-            EditedState::Edited {
-                edited_at: row.get("edited_at"),
-            }
-        } else {
-            EditedState::NotEdited
-        };
-        let author = row.get("written_by");
-        let replys_for = row.get("reply_to");
-        let under_post = row.get("under_post");
-        Ok(CommentFromRow {
-            uuid: row.get("id"),
-            content,
-            published_at,
-            edited,
-            author,
-            replys_for,
-            under_post,
-            likes: row.get("likes"),
-            dislikes: row.get("dislikes"),
-        })
     }
 }

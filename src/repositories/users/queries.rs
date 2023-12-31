@@ -1,3 +1,4 @@
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
@@ -115,7 +116,7 @@ impl ChangeQuery {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize)]
 pub enum ChangeQueryParam {
     Password(String),
     About(String),

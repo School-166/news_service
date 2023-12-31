@@ -1,19 +1,18 @@
 use crate::{
     controllers::{users::UserController, Controller},
     dto::{PublishPostDTO, PublishPostJSON, SingDTO, UserRegistrationDTO},
-    models::Model,
     repositories::{
-        comments::{CommentsRepo, GetCommentQueryParam},
+        find_commentable,
         posts::PostsRepo,
-        users::UserRepo,
+        users::{queries::ChangeQueryParam, UserRepo},
     },
 };
 use actix_web::{
-    get, post,
+    get, patch, post,
     web::{Json, Path},
     HttpResponse, Responder, Scope,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -21,10 +20,8 @@ pub fn user_scope() -> Scope {
     Scope::new("/users")
         .service(get_user)
         .service(publish_post)
-        .service(dislike_comment)
-        .service(dislike_post)
-        .service(like_comment)
-        .service(like_post)
+        .service(mark_comment)
+        .service(mark_post)
         .service(comment_comment)
         .service(comment_post)
         .service(register)
@@ -70,156 +67,86 @@ async fn publish_post(
     HttpResponse::Created().json(PostsRepo::get_instance().await.publish(dto).await.unwrap())
 }
 
-#[derive(Serialize)]
-enum MarkErrors {
-    UserNotFound,
-    MarkableNotFound,
-}
-
-#[post("/{username}/like/comment/{comment_uuid}")]
-async fn like_comment(path: Path<(String, String)>) -> impl Responder {
-    let (username, comment) = (*path).clone();
-    let user = match UserRepo::get_instance()
-        .await
-        .get_by_username(username)
-        .await
-    {
-        Some(user) => user,
-        None => return HttpResponse::NotFound().json(MarkErrors::UserNotFound),
+#[post("/comment/{comment_uuid}/liked/{liked}")]
+async fn mark_comment(path: Path<(String, bool)>, json: Json<SingDTO>) -> impl Responder {
+    let (comment, liked) = path.clone();
+    let sing_data = json.clone();
+    let controller = match UserController::sing(sing_data.username, sing_data.password).await {
+        Ok(user) => user,
+        Err(err) => return HttpResponse::BadRequest().json(err),
     };
-    let comment = match Uuid::from_str(&comment) {
+    let uuid = match Uuid::from_str(&comment) {
         Ok(uuid) => uuid,
         Err(_) => return HttpResponse::BadRequest().finish(),
     };
-    let comment = match CommentsRepo::get_instance()
-        .await
-        .get_one(vec![GetCommentQueryParam::Uuid(comment)])
-        .await
-    {
+    let comment = match find_commentable(uuid).await {
         Some(comment) => comment,
-        None => return HttpResponse::NotFound().json(MarkErrors::MarkableNotFound),
+        None => return HttpResponse::NotFound().finish(),
     };
-    user.controller().like(comment).await;
+    if liked {
+        controller.like(comment).await
+    } else {
+        controller.dislike(comment).await
+    }
     HttpResponse::Accepted().finish()
 }
 
-#[post("/{username}/dislike/comment/{comment_uuid}")]
-async fn dislike_comment(path: Path<(String, String)>) -> impl Responder {
-    let (username, comment) = (*path).clone();
-    let user = match UserRepo::get_instance()
-        .await
-        .get_by_username(username)
-        .await
-    {
-        Some(user) => user,
-        None => return HttpResponse::NotFound().json(MarkErrors::UserNotFound),
+#[post("/{post_uuid}/liked/{liked}")]
+async fn mark_post(path: Path<(String, bool)>, json: Json<SingDTO>) -> impl Responder {
+    let (post, liked) = (*path).clone();
+    let sing_data = json.clone();
+    let controller = match UserController::sing(sing_data.username, sing_data.password).await {
+        Ok(user) => user,
+        Err(err) => return HttpResponse::BadRequest().json(err),
     };
-    let comment = match Uuid::from_str(&comment) {
+    let uuid = match Uuid::from_str(&post) {
         Ok(uuid) => uuid,
         Err(_) => return HttpResponse::BadRequest().finish(),
     };
-    let comment = match CommentsRepo::get_instance()
-        .await
-        .get_one(vec![GetCommentQueryParam::Uuid(comment)])
-        .await
-    {
-        Some(comment) => comment,
-        None => return HttpResponse::NotFound().json(MarkErrors::MarkableNotFound),
-    };
-    user.controller().dislike(comment).await;
-    HttpResponse::Accepted().finish()
-}
-
-#[post("/{username}/like/post/{post_uuid}")]
-async fn like_post(path: Path<(String, String)>) -> impl Responder {
-    let (username, post) = (*path).clone();
-    let user = match UserRepo::get_instance()
-        .await
-        .get_by_username(username)
-        .await
-    {
-        Some(user) => user,
-        None => return HttpResponse::NotFound().json(MarkErrors::UserNotFound),
-    };
-    let post = match Uuid::from_str(&post) {
-        Ok(uuid) => uuid,
-        Err(_) => return HttpResponse::BadRequest().finish(),
-    };
-    let post = match PostsRepo::get_instance().await.get_by_uuid(post).await {
+    let post = match find_commentable(uuid).await {
         Some(post) => post,
-        None => return HttpResponse::NotFound().json(MarkErrors::MarkableNotFound),
+        None => return HttpResponse::NotFound().finish(),
     };
-    user.controller().like(post).await;
+    if liked {
+        controller.like(post).await
+    } else {
+        controller.dislike(post).await
+    }
     HttpResponse::Accepted().finish()
 }
 
-#[post("/{username}/dislike/post/{post_uuid}")]
-async fn dislike_post(path: Path<(String, String)>) -> impl Responder {
-    let (username, post) = (*path).clone();
-    let user = match UserRepo::get_instance()
-        .await
-        .get_by_username(username)
-        .await
-    {
-        Some(user) => user,
-        None => return HttpResponse::NotFound().json(MarkErrors::UserNotFound),
-    };
-    let post = match Uuid::from_str(&post) {
-        Ok(uuid) => uuid,
-        Err(_) => return HttpResponse::BadRequest().finish(),
-    };
-    let post = match PostsRepo::get_instance().await.get_by_uuid(post).await {
-        Some(post) => post,
-        None => return HttpResponse::NotFound().json(MarkErrors::MarkableNotFound),
-    };
-    user.controller().dislike(post).await;
-    HttpResponse::Accepted().finish()
-}
-
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct CommentJSON {
     content: String,
 }
 
-#[post("/{username}/comment/comment/{comment_uuid}")]
-async fn comment_comment(path: Path<(String, String)>, json: Json<CommentJSON>) -> impl Responder {
-    let (username, comment) = (*path).clone();
-    let content = json.content.clone();
-    let user = match UserRepo::get_instance()
-        .await
-        .get_by_username(username)
-        .await
-    {
-        Some(user) => user,
-        None => return HttpResponse::NotFound().json(MarkErrors::UserNotFound),
+#[post("/comment/{commentable_uuid}")]
+async fn comment_comment(path: Path<String>, json: Json<(CommentJSON, SingDTO)>) -> impl Responder {
+    let post = path.clone();
+    let (content, sing_data) = json.clone();
+    let controller = match UserController::sing(sing_data.username, sing_data.password).await {
+        Ok(controller) => controller,
+        Err(err) => return HttpResponse::BadRequest().json(err),
     };
-    let comment = match Uuid::from_str(&comment) {
+    let comment = match Uuid::from_str(&post) {
         Ok(uuid) => uuid,
         Err(_) => return HttpResponse::BadRequest().finish(),
     };
-    let comment = match CommentsRepo::get_instance()
-        .await
-        .get_one(vec![GetCommentQueryParam::Uuid(comment)])
-        .await
-    {
-        Some(comment) => comment,
-        None => return HttpResponse::NotFound().json(MarkErrors::MarkableNotFound),
+    let comment = match find_commentable() {
+        Some(post) => post,
+        None => return HttpResponse::NotFound().finish(),
     };
-    user.controller().comment(comment, content).await;
+    controller.comment_resource(comment, content.content).await;
     HttpResponse::Accepted().finish()
 }
 
-#[post("/{username}/comment/post/{post_uuid}")]
-async fn comment_post(path: Path<(String, String)>, json: Json<CommentJSON>) -> impl Responder {
-    let (username, post) = (*path).clone();
-    let content = json.content.clone();
-    let user = match UserRepo::get_instance()
-        .await
-        .get_by_username(username)
-        .await
-    {
-        Some(user) => user,
-        None => return HttpResponse::NotFound().json(MarkErrors::UserNotFound),
+#[post("/comment/post/{post_uuid}")]
+async fn comment_post(path: Path<String>, json: Json<(CommentJSON, SingDTO)>) -> impl Responder {
+    let post = path.clone();
+    let (content, sing_data) = json.clone();
+    let controller = match UserController::sing(sing_data.username, sing_data.password).await {
+        Ok(controller) => controller,
+        Err(err) => return HttpResponse::BadRequest().json(err),
     };
     let post = match Uuid::from_str(&post) {
         Ok(uuid) => uuid,
@@ -227,8 +154,21 @@ async fn comment_post(path: Path<(String, String)>, json: Json<CommentJSON>) -> 
     };
     let post = match PostsRepo::get_instance().await.get_by_uuid(post).await {
         Some(post) => post,
-        None => return HttpResponse::NotFound().json(MarkErrors::MarkableNotFound),
+        None => return HttpResponse::NotFound().finish(),
     };
-    user.controller().comment(post, content).await;
+    controller.comment_resource(post, content.content).await;
     HttpResponse::Accepted().finish()
+}
+
+#[patch("/change")]
+async fn change_param(params: Json<(Vec<ChangeQueryParam>, SingDTO)>) -> impl Responder {
+    let (params, sing_data) = params.clone();
+    let controller = match UserController::sing(sing_data.username, sing_data.password).await {
+        Ok(controller) => controller,
+        Err(err) => return HttpResponse::BadRequest().json(err),
+    };
+    match controller.change_parameters(params).await {
+        Ok(_) => HttpResponse::Accepted().finish(),
+        Err(errors) => HttpResponse::BadRequest().json(errors),
+    }
 }

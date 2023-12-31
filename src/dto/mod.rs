@@ -13,6 +13,12 @@ pub struct PublishCommentDTO {
     pub for_post: PostModel,
 }
 
+#[derive(Deserialize, Clone)]
+pub enum SortDirectionDTO {
+    Increment,
+    Decrement,
+}
+
 #[derive(Deserialize)]
 pub struct PublishPostJSON {
     pub title: String,

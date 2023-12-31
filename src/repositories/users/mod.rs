@@ -1,4 +1,4 @@
-use self::queries::{ChangeParamsError, ChangeQuery, GetByQueryParam};
+use self::queries::{ChangeQuery, GetByQueryParam};
 use crate::{
     dto::UserRegistrationDTO,
     get_db_pool,
@@ -170,21 +170,12 @@ impl UserRepo {
             .is_none()
     }
 
-    pub async fn change_params(
-        &self,
-        params: Vec<ValidatedChangeQueryParam>,
-        model: UserModel,
-    ) -> Result<(), ChangeParamsError> {
-        if self.is_username_free(model.username()).await {
-            return Err(ChangeParamsError::UserDoesntExist);
-        }
-
+    pub async fn change_params(&self, params: Vec<ValidatedChangeQueryParam>, model: UserModel) {
         for param in params {
             let _ = sqlx::query(&ChangeQuery::new(&model, param).to_sql())
                 .execute(&self.pool())
                 .await;
         }
-        Ok(())
     }
 }
 

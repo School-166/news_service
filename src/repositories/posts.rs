@@ -2,7 +2,7 @@ use crate::{
     dto::PublishPostDTO,
     get_db_pool,
     models::post::PostModel,
-    prelude::{OrderingDirection, ToSQL},
+    prelude::{SortingDirection, ToSQL},
     types::{EditedState, Limit},
     utils::sql::SelectRequestBuilder,
 };
@@ -119,9 +119,9 @@ impl PostsRepo {
 
     pub async fn get_many(
         &self,
-        query: Vec<GetPostQueryParam>,
+        query: Vec<GetQueryParam>,
         limit: Limit,
-        order_by: OrderingDirection<OrderParam>,
+        order_by: SortingDirection<SortingParam>,
     ) -> Vec<PostModel> {
         let sql = SelectRequestBuilder::new(
             "select posts.uuid,
@@ -132,7 +132,7 @@ impl PostsRepo {
                 posts.edited ,
                 posts.edited_at,
                 posts.tags,
-                div(count(post_mark.liked = true), count(post_mark.liked = true) + count(post_mark.liked = false)) as raiting,
+                div(count(post_mark.liked = true), count(post_mark.liked = true) + count(post_mark.liked = false) + 1) as raiting,
                 count(post_mark.liked = true) as likes,                  
                 count(post_mark.liked = false) as dislikes
                 from posts join post_mark on posts.uuid = post_mark.post"
@@ -167,38 +167,38 @@ impl PostsRepo {
     }
 }
 
-pub enum GetPostQueryParam {
+pub enum GetQueryParam {
     Uuid(Uuid),
     Author(String),
     Tags(Vec<String>),
 }
 
 #[derive(Deserialize, Clone)]
-pub enum OrderParam {
+pub enum SortingParam {
     Raiting,
     ReleaseTime,
 }
 
-impl ToSQL for OrderParam {
+impl ToSQL for SortingParam {
     fn to_sql(&self) -> String {
         match self {
-            OrderParam::Raiting => "raiting",
-            OrderParam::ReleaseTime => "published_at",
+            SortingParam::Raiting => "raiting",
+            SortingParam::ReleaseTime => "published_at",
         }
         .to_string()
     }
 }
 
-impl ToSQL for GetPostQueryParam {
+impl ToSQL for GetQueryParam {
     fn to_sql(&self) -> String {
         match self {
-            GetPostQueryParam::Uuid(uuid) => {
+            GetQueryParam::Uuid(uuid) => {
                 format!("uuid = '{}'", uuid)
             }
-            GetPostQueryParam::Author(username) => {
+            GetQueryParam::Author(username) => {
                 format!("author = '{}'", username)
             }
-            GetPostQueryParam::Tags(tags) => {
+            GetQueryParam::Tags(tags) => {
                 let tag_string;
                 tag_string = {
                     if tags.is_empty() {

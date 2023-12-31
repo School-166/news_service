@@ -19,12 +19,6 @@ pub enum EditedState {
     NotEdited,
 }
 
-#[derive(Deserialize, Clone)]
-pub enum SortDirection {
-    Increment,
-    Decrement,
-}
-
 impl EditedState {
     pub fn is_edited(&self) -> bool {
         matches!(self, Self::Edited { .. })

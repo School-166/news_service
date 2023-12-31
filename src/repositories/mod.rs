@@ -1,6 +1,7 @@
+use self::{comments::CommentsRepo, posts::PostsRepo};
+use crate::{prelude::Resource, types::EditedState};
 use sqlx::{postgres::PgRow, FromRow, Row};
-
-use crate::types::EditedState;
+use uuid::Uuid;
 
 pub mod comments;
 pub(super) mod marks_repo;
@@ -17,4 +18,18 @@ impl FromRow<'_, PgRow> for EditedState {
             EditedState::NotEdited
         })
     }
+}
+
+pub async fn find_commentable(uuid: Uuid) -> Option<Box<dyn Resource>> {
+    if let Some(comment) = CommentsRepo::get_instance()
+        .await
+        .get_by_uuid(uuid.clone())
+        .await
+    {
+        return Some(Box::new(comment));
+    }
+    if let Some(post) = PostsRepo::get_instance().await.get_by_uuid(uuid).await {
+        return Some(Box::new(post));
+    }
+    None
 }

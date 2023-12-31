@@ -1,9 +1,7 @@
 use super::{post::PostModel, user::UserModel};
 use crate::{
-    prelude::Markable,
     repositories::{
-        comments::{CommentFromRow, CommentsRepo, GetCommentQueryParam},
-        marks_repo::{comments::CommentsMarkRepo, MarkAbleRepo},
+        comments::{CommentsRepo, GetCommentQueryParam},
         posts::PostsRepo,
         users::UserRepo,
     },
@@ -12,7 +10,7 @@ use crate::{
 use async_recursion::async_recursion;
 use chrono::NaiveDateTime;
 use serde::Serialize;
-use sqlx::types::Uuid;
+use sqlx::{postgres::PgRow, types::Uuid, FromRow, Row};
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Serialize)]
@@ -29,50 +27,34 @@ pub struct CommentModel {
     uuid: String,
 }
 
-impl Markable for CommentModel {
-    async fn like(&self, user: UserModel) {
-        CommentsMarkRepo::get_instance()
-            .await
-            .like(user, self.clone())
-            .await
-    }
-
-    async fn dislike(&self, user: UserModel) {
-        CommentsMarkRepo::get_instance()
-            .await
-            .dislike(user, self.clone())
-            .await
-    }
-
-    fn uuid(&self) -> Uuid {
-        self.uuid()
-    }
-}
-
 impl CommentModel {
     #[async_recursion]
-    pub async fn from_row(model: CommentFromRow) -> CommentModel {
+    pub async fn from_row(row: PgRow) -> CommentModel {
+        let uuid = row.get("uuid");
         let comments = CommentsRepo::get_instance()
             .await
-            .get_many(vec![GetCommentQueryParam::Replies(model.uuid())])
+            .get_many(vec![GetCommentQueryParam::Replies(uuid.clone())])
             .await;
         CommentModel {
-            uuid: model.uuid().to_string(),
-            content: model.content(),
-            published_at: model.published_at(),
-            edited: model.edited(),
+            uuid,
+            content: row.get("content"),
+            published_at: row.get("published_at"),
+            edited: EditedState::from_row(&row),
             author: UserRepo::get_instance()
                 .await
-                .get_by_username(model.author())
+                .get_by_username(row.get("author"))
                 .await
                 .unwrap(),
-            likes: model.likes_count(),
-            dislikes: model.dislikes_count(),
+            likes: row.get("likes"),
+            dislikes: row.get("dislikes"),
             comments,
-            replys_for: model.replys_for().map(|uuid| uuid.to_string()),
+            replys_for: row
+                .get("replys_for")
+                .replys_for()
+                .map(|uuid| uuid.to_string()),
             under_post: PostsRepo::get_instance()
                 .await
-                .get_by_uuid(model.under_post())
+                .get_by_uuid(row.get("under_post"))
                 .await
                 .unwrap(),
         }

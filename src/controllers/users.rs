@@ -1,13 +1,11 @@
 use super::Controller;
 use crate::{
-    models::{user::UserModel, Commentable, Model},
-    prelude::{Markable, Validateble},
+    models::user::UserModel,
+    prelude::{Markable, Resource},
     repositories::users::{queries::ChangeQueryParam, UserRepo},
-    types::Class,
-    validators::repository_query::users::ValidationError,
+    validators::repository_query::users::{ValidatedChangeQueryParam, ValidationError},
 };
 use serde::Serialize;
-use uuid::Uuid;
 
 pub struct UserController {
     username: String,
@@ -21,16 +19,6 @@ impl Controller for UserController {
             .get_by_username(self.username.clone())
             .await
             .unwrap()
-    }
-}
-
-impl Model for UserModel {
-    type Controller = UserController;
-
-    fn controller(self) -> Self::Controller {
-        UserController {
-            username: self.username(),
-        }
     }
 }
 
@@ -59,72 +47,39 @@ impl UserController {
         }
     }
 
-    pub async fn sing_by_uuid(uuid: Uuid) -> Option<Self> {
-        if let Some(user) = UserRepo::get_instance().await.get_by_uuid(uuid).await {
-            return Some(UserController {
-                username: user.username(),
-            });
+    pub async fn change_parameters(
+        &self,
+        params: Vec<ChangeQueryParam>,
+    ) -> Result<(), Vec<ValidationError>> {
+        let mut errors = Vec::new();
+        let mut validated_params = Vec::new();
+        let model = self.model().await;
+
+        for param in params {
+            match ValidatedChangeQueryParam::validate(param, &model) {
+                Ok(param) => validated_params.push(param),
+                Err(mut err) => errors.append(&mut err),
+            }
         }
-        None
-    }
-    pub async fn change_name(&self, name: String) -> Result<(), Vec<ValidationError>> {
+        if !errors.is_empty() {
+            return Err(errors);
+        }
         UserRepo::get_instance()
             .await
-            .change_params(
-                vec![ChangeQueryParam::FirstName(name.clone()).validate(&self.model().await)?],
-                self.model().await,
-            )
-            .await
-            .unwrap();
+            .change_params(validated_params, self.model().await)
+            .await;
         Ok(())
     }
 
-    pub async fn change_last_name(&self, last_name: String) -> Result<(), Vec<ValidationError>> {
-        UserRepo::get_instance()
-            .await
-            .change_params(
-                vec![ChangeQueryParam::LastName(last_name.clone()).validate(&self.model().await)?],
-                self.model().await,
-            )
-            .await
-            .unwrap();
-        Ok(())
+    pub async fn comment(&self, resource: Box<dyn Resource>, content: String) {
+        resource.comment(content, &self).await;
     }
 
-    pub async fn change_class(&self, class: Class) -> Result<(), Vec<ValidationError>> {
-        UserRepo::get_instance()
-            .await
-            .change_params(
-                vec![ChangeQueryParam::Class(class).validate(&self.model().await)?],
-                self.model().await,
-            )
-            .await
-            .expect("unreacheble");
-        Ok(())
+    pub async fn like(&self, markable: Box<dyn Markable>) {
+        markable.like(&self).await
     }
 
-    pub async fn change_about_me(&self, about: String) {
-        UserRepo::get_instance()
-            .await
-            .change_params(
-                vec![ChangeQueryParam::About(about.clone())
-                    .validate(&self.model().await)
-                    .unwrap()],
-                self.model().await,
-            )
-            .await
-            .unwrap();
-    }
-
-    pub async fn comment(&self, resource: impl Commentable + Sync, content: String) {
-        resource.comment(content, self.model().await).await
-    }
-
-    pub async fn like(&self, markable: impl Markable) {
-        markable.like(self.model().await).await
-    }
-
-    pub async fn dislike(&self, markable: impl Markable) {
-        markable.dislike(self.model().await).await
+    pub async fn dislike(&self, markable: Box<dyn Markable>) {
+        markable.dislike(&self).await
     }
 }

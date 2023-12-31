@@ -2,6 +2,7 @@ use crate::{
     models::user::UserModel, prelude::Validateble, repositories::users::queries::ChangeQueryParam,
 };
 use regex::Regex;
+use serde::Serialize;
 
 pub struct ValidatedChangeQueryParam(ChangeQueryParam);
 
@@ -16,7 +17,10 @@ impl Validateble for ChangeQueryParam {
 }
 
 impl ValidatedChangeQueryParam {
-    fn validate(param: ChangeQueryParam, target: &UserModel) -> Result<Self, Vec<ValidationError>> {
+    pub fn validate(
+        param: ChangeQueryParam,
+        target: &UserModel,
+    ) -> Result<Self, Vec<ValidationError>> {
         match param.clone() {
             ChangeQueryParam::Password(password) => validate_password(password)?,
             ChangeQueryParam::Email(email) => validate_email(email)?,
@@ -116,7 +120,7 @@ fn validate_name(name: String) -> Result<(), Vec<ValidationError>> {
     Ok(())
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub enum ValidationError {
     InvalidPhoneNumber(InvalidPhoneNumber),
     InvalidPassword(InvalidPassword),
@@ -128,14 +132,14 @@ pub enum ValidationError {
     ChangingClassForNotStudent,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub enum InvalidPhoneNumber {
     PhoneNumberToLong,
     PhoneNumberToSmall,
     PhoneNumberContainsOtherLiterals,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub enum InvalidPassword {
     PasswordToLong,
     PasswordToShort,

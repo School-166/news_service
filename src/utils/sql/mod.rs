@@ -1,5 +1,5 @@
 use crate::{
-    prelude::{OrderingDirection, ToSQL},
+    prelude::{SortingDirection, ToSQL},
     types::Limit,
 };
 
@@ -10,7 +10,7 @@ where
 {
     main_query: String,
     group_by: Option<String>,
-    order_by: Option<OrderingDirection<OrderingType>>,
+    order_by: Option<SortingDirection<OrderingType>>,
     limit: Option<Limit>,
     query: Vec<Query>,
 }
@@ -31,7 +31,7 @@ where
     }
     pub fn order_by(
         self,
-        order_by: OrderingDirection<OrderingType>,
+        order_by: SortingDirection<OrderingType>,
     ) -> SelectRequestBuilder<OrderingType, Query> {
         SelectRequestBuilder {
             main_query: self.main_query,

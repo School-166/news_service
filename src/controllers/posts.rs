@@ -1,8 +1,5 @@
 use super::Controller;
-use crate::{
-    models::{post::PostModel, Model},
-    repositories::posts::PostsRepo,
-};
+use crate::{models::post::PostModel, repositories::posts::PostsRepo};
 use uuid::Uuid;
 
 pub struct PostController {
@@ -18,13 +15,5 @@ impl Controller for PostController {
             .get_by_uuid(self.uuid.clone())
             .await
             .unwrap()
-    }
-}
-
-impl Model for PostModel {
-    type Controller = PostController;
-
-    fn controller(self) -> Self::Controller {
-        PostController { uuid: self.uuid() }
     }
 }

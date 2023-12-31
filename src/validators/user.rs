@@ -18,8 +18,10 @@ impl Validateble for UserModel {
         let _ = validate_name(self.last_name()).map_err(|err| lambda(err));
         let _ = validate_email(self.email()).map_err(|err| lambda(err));
         let _ = validate_phone_number(self.phone_number()).map_err(|err| lambda(err));
-        let _ = validate_name(self.username()).map_err(|err| lambda(err));
-
+        let _ = validate_username(self.username()).map_err(|err| lambda(err));
+        if self.about().len() > 500 {
+            errors.push(UserValidationError::InvalidAbout)
+        }
         if !errors.is_empty() {
             return Err(errors);
         }

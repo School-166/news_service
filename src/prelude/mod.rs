@@ -1,4 +1,7 @@
-use crate::models::user::UserModel;
+use crate::{
+    controllers::users::UserController, dto::PublishCommentDTO, models::user::UserModel,
+    repositories::comments::CommentsRepo,
+};
 use uuid::Uuid;
 
 pub trait QueryInterpreter {
@@ -13,7 +16,31 @@ impl ToSQL for () {
     }
 }
 
-pub enum OrderingDirection<T>
+pub trait PublishDTOBuilder {
+    async fn build_dto(&self, content: String, author: UserModel) -> PublishCommentDTO;
+}
+
+pub trait Commentable: PublishDTOBuilder {
+    async fn comment(&self, content: String, author: &UserController) {
+        CommentsRepo::get_instance()
+            .await
+            .publish_comment(self.build_dto(content, author).await)
+            .await
+            .unwrap();
+    }
+}
+
+pub trait Editable {
+    async fn edit(&self, comment: &str, user: &UserController);
+}
+
+pub trait Resource
+where
+    Self: Markable + Commentable + Editable + Sync,
+{
+}
+
+pub enum SortingDirection<T>
 where
     T: ToSQL,
 {
@@ -21,14 +48,14 @@ where
     Down(T),
 }
 
-impl<T> ToSQL for OrderingDirection<T>
+impl<T> ToSQL for SortingDirection<T>
 where
     T: ToSQL,
 {
     fn to_sql(&self) -> String {
         match self {
-            OrderingDirection::Up(order) => format!("{} desc", order.to_sql()),
-            OrderingDirection::Down(order) => format!("{} asc", order.to_sql()),
+            SortingDirection::Up(order) => format!("{} desc", order.to_sql()),
+            SortingDirection::Down(order) => format!("{} asc", order.to_sql()),
         }
     }
 }
@@ -46,13 +73,7 @@ pub trait Validateble {
 }
 
 pub trait Markable {
-    fn like(&self, user: UserModel) -> impl std::future::Future<Output = ()> + Send;
-    fn dislike(&self, user: UserModel) -> impl std::future::Future<Output = ()> + Send;
-    fn uuid(&self) -> Uuid;
-}
-
-pub trait MarkableFromRow {
-    fn likes_count(&self) -> impl std::future::Future<Output = u64> + Send;
-    fn dislikes_count(&self) -> impl std::future::Future<Output = u64> + Send;
+    async fn like(&self, user: &UserController);
+    async fn dislike(&self, user: &UserController);
     fn uuid(&self) -> Uuid;
 }

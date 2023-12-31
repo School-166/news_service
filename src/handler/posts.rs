@@ -1,7 +1,8 @@
 use crate::{
-    prelude::OrderingDirection,
-    repositories::posts::{GetPostQueryParam, OrderParam, PostsRepo},
-    types::{Limit, SortDirection},
+    dto::SortDirectionDTO,
+    prelude::SortingDirection,
+    repositories::posts::{GetQueryParam, PostsRepo, SortingParam},
+    types::Limit,
 };
 use actix_web::{get, HttpResponse, Responder};
 use serde::Deserialize;
@@ -11,8 +12,8 @@ struct SearchQueryParams {
     limit: Option<u8>,
     page: u32,
     tags: Vec<String>,
-    sort_by: Option<OrderParam>,
-    direction: Option<SortDirection>,
+    sort_by: Option<SortingParam>,
+    direction: Option<SortDirectionDTO>,
 }
 
 #[get("/search")]
@@ -26,18 +27,18 @@ async fn search(query: actix_web::web::Query<SearchQueryParams>) -> impl Respond
     let sort_direction = query
         .direction
         .clone()
-        .map_or(SortDirection::Increment, |direction| direction);
+        .map_or(SortDirectionDTO::Increment, |direction| direction);
     let sort_by = query
         .sort_by
         .clone()
-        .map_or(OrderParam::Raiting, |params| params);
+        .map_or(SortingParam::Raiting, |params| params);
     let ordering_param = match sort_direction {
-        SortDirection::Increment => OrderingDirection::Up(sort_by),
-        SortDirection::Decrement => OrderingDirection::Down(sort_by),
+        SortDirectionDTO::Increment => SortingDirection::Up(sort_by),
+        SortDirectionDTO::Decrement => SortingDirection::Down(sort_by),
     };
     let responce = PostsRepo::get_instance()
         .await
-        .get_many(vec![GetPostQueryParam::Tags(tags)], limit, ordering_param)
+        .get_many(vec![GetQueryParam::Tags(tags)], limit, ordering_param)
         .await;
 
     HttpResponse::Ok().json(responce)

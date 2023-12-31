@@ -1,7 +1,7 @@
 use super::Controller;
 use crate::{
     models::user::UserModel,
-    prelude::{Markable, Resource},
+    prelude::Resource,
     repositories::users::{queries::ChangeQueryParam, UserRepo},
     validators::repository_query::users::{ValidatedChangeQueryParam, ValidationError},
 };
@@ -72,14 +72,14 @@ impl UserController {
     }
 
     pub async fn comment(&self, resource: Box<dyn Resource>, content: String) {
-        resource.comment(content, &self).await;
+        resource.comment(content, &self);
     }
 
-    pub async fn like(&self, markable: Box<dyn Markable>) {
-        markable.like(&self).await
+    pub async fn like(&self, markable: Box<dyn Resource>) {
+        markable.like(&self)
     }
 
-    pub async fn dislike(&self, markable: Box<dyn Markable>) {
-        markable.dislike(&self).await
+    pub async fn dislike(&self, markable: Box<dyn Resource>) {
+        markable.dislike(&self)
     }
 }

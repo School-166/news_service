@@ -4,7 +4,7 @@ use crate::{
     repositories::posts::{GetQueryParam, PostsRepo, SortingParam},
     types::Limit,
 };
-use actix_web::{get, HttpResponse, Responder};
+use actix_web::{get, HttpResponse, Responder, Scope};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -14,6 +14,10 @@ struct SearchQueryParams {
     tags: Vec<String>,
     sort_by: Option<SortingParam>,
     direction: Option<SortDirectionDTO>,
+}
+
+pub fn posts_scope() -> Scope {
+    Scope::new("/posts").service(search)
 }
 
 #[get("/search")]

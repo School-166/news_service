@@ -2,7 +2,7 @@ use crate::{
     controllers::{users::UserController, Controller},
     dto::{PublishPostDTO, PublishPostJSON, SingDTO, UserRegistrationDTO},
     repositories::{
-        find_commentable,
+        find_resources,
         posts::PostsRepo,
         users::{queries::ChangeQueryParam, UserRepo},
     },
@@ -20,10 +20,8 @@ pub fn user_scope() -> Scope {
     Scope::new("/users")
         .service(get_user)
         .service(publish_post)
-        .service(mark_comment)
-        .service(mark_post)
-        .service(comment_comment)
-        .service(comment_post)
+        .service(mark)
+        .service(comment)
         .service(register)
 }
 
@@ -67,32 +65,8 @@ async fn publish_post(
     HttpResponse::Created().json(PostsRepo::get_instance().await.publish(dto).await.unwrap())
 }
 
-#[post("/comment/{comment_uuid}/liked/{liked}")]
-async fn mark_comment(path: Path<(String, bool)>, json: Json<SingDTO>) -> impl Responder {
-    let (comment, liked) = path.clone();
-    let sing_data = json.clone();
-    let controller = match UserController::sing(sing_data.username, sing_data.password).await {
-        Ok(user) => user,
-        Err(err) => return HttpResponse::BadRequest().json(err),
-    };
-    let uuid = match Uuid::from_str(&comment) {
-        Ok(uuid) => uuid,
-        Err(_) => return HttpResponse::BadRequest().finish(),
-    };
-    let comment = match find_commentable(uuid).await {
-        Some(comment) => comment,
-        None => return HttpResponse::NotFound().finish(),
-    };
-    if liked {
-        controller.like(comment).await
-    } else {
-        controller.dislike(comment).await
-    }
-    HttpResponse::Accepted().finish()
-}
-
-#[post("/{post_uuid}/liked/{liked}")]
-async fn mark_post(path: Path<(String, bool)>, json: Json<SingDTO>) -> impl Responder {
+#[post("/{resource_uuid}/liked/{liked}")]
+async fn mark(path: Path<(String, bool)>, json: Json<SingDTO>) -> impl Responder {
     let (post, liked) = (*path).clone();
     let sing_data = json.clone();
     let controller = match UserController::sing(sing_data.username, sing_data.password).await {
@@ -103,7 +77,7 @@ async fn mark_post(path: Path<(String, bool)>, json: Json<SingDTO>) -> impl Resp
         Ok(uuid) => uuid,
         Err(_) => return HttpResponse::BadRequest().finish(),
     };
-    let post = match find_commentable(uuid).await {
+    let post = match find_resources(uuid).await {
         Some(post) => post,
         None => return HttpResponse::NotFound().finish(),
     };
@@ -121,42 +95,22 @@ pub struct CommentJSON {
 }
 
 #[post("/comment/{commentable_uuid}")]
-async fn comment_comment(path: Path<String>, json: Json<(CommentJSON, SingDTO)>) -> impl Responder {
+async fn comment(path: Path<String>, json: Json<(CommentJSON, SingDTO)>) -> impl Responder {
     let post = path.clone();
     let (content, sing_data) = json.clone();
     let controller = match UserController::sing(sing_data.username, sing_data.password).await {
         Ok(controller) => controller,
         Err(err) => return HttpResponse::BadRequest().json(err),
     };
-    let comment = match Uuid::from_str(&post) {
+    let resource_uuid = match Uuid::from_str(&post) {
         Ok(uuid) => uuid,
         Err(_) => return HttpResponse::BadRequest().finish(),
     };
-    let comment = match find_commentable() {
+    let comment = match find_resources(resource_uuid).await {
         Some(post) => post,
         None => return HttpResponse::NotFound().finish(),
     };
-    controller.comment_resource(comment, content.content).await;
-    HttpResponse::Accepted().finish()
-}
-
-#[post("/comment/post/{post_uuid}")]
-async fn comment_post(path: Path<String>, json: Json<(CommentJSON, SingDTO)>) -> impl Responder {
-    let post = path.clone();
-    let (content, sing_data) = json.clone();
-    let controller = match UserController::sing(sing_data.username, sing_data.password).await {
-        Ok(controller) => controller,
-        Err(err) => return HttpResponse::BadRequest().json(err),
-    };
-    let post = match Uuid::from_str(&post) {
-        Ok(uuid) => uuid,
-        Err(_) => return HttpResponse::BadRequest().finish(),
-    };
-    let post = match PostsRepo::get_instance().await.get_by_uuid(post).await {
-        Some(post) => post,
-        None => return HttpResponse::NotFound().finish(),
-    };
-    controller.comment_resource(post, content.content).await;
+    controller.comment(comment, content.content).await;
     HttpResponse::Accepted().finish()
 }
 

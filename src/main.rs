@@ -5,6 +5,8 @@ use lazy_static::lazy_static;
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use sqlx::{postgres::PgPoolOptions, PgPool};
 
+use crate::handler::posts::posts_scope;
+
 pub mod controllers;
 pub mod dto;
 mod handler;
@@ -37,7 +39,7 @@ async fn main() -> std::io::Result<()> {
     builder.set_certificate_chain_file("cert.pem").unwrap();
     HttpServer::new(|| {
         println!("started");
-        App::new().service(user_scope())
+        App::new().service(user_scope()).service(posts_scope())
     })
     .bind_openssl("127.0.0.1:8080", builder)?
     .run()

@@ -1,5 +1,7 @@
 use crate::{
-    controllers::users::UserController, dto::PublishCommentDTO, models::user::UserModel,
+    controllers::{users::UserController, Controller},
+    dto::PublishCommentDTO,
+    models::user::UserModel,
     repositories::comments::CommentsRepo,
 };
 use uuid::Uuid;
@@ -17,21 +19,27 @@ impl ToSQL for () {
 }
 
 pub trait PublishDTOBuilder {
-    async fn build_dto(&self, content: String, author: UserModel) -> PublishCommentDTO;
+    fn build_dto(&self, content: String, author: UserModel) -> PublishCommentDTO;
 }
 
 pub trait Commentable: PublishDTOBuilder {
-    async fn comment(&self, content: String, author: &UserController) {
-        CommentsRepo::get_instance()
-            .await
-            .publish_comment(self.build_dto(content, author).await)
-            .await
-            .unwrap();
+    fn comment(&self, content: String, author: &UserController) {
+        futures::executor::block_on(async {
+            CommentsRepo::get_instance()
+                .await
+                .publish_comment(self.build_dto(content, author.model().await))
+                .await
+                .unwrap();
+        })
     }
 }
 
+pub enum EditError {
+    EditsNotAuthor,
+}
+
 pub trait Editable {
-    async fn edit(&self, comment: &str, user: &UserController);
+    fn edit(&self, comment: &str, user: &UserController) -> Result<(), EditError>;
 }
 
 pub trait Resource
@@ -73,7 +81,7 @@ pub trait Validateble {
 }
 
 pub trait Markable {
-    async fn like(&self, user: &UserController);
-    async fn dislike(&self, user: &UserController);
+    fn like(&self, user: &UserController);
+    fn dislike(&self, user: &UserController);
     fn uuid(&self) -> Uuid;
 }

@@ -3,74 +3,17 @@ use crate::{
     get_db_pool,
     models::post::PostModel,
     prelude::{SortingDirection, ToSQL},
-    types::{EditedState, Limit},
+    types::Limit,
     utils::sql::SelectRequestBuilder,
 };
-use chrono::NaiveDateTime;
 use serde::Deserialize;
-use sqlx::{
-    postgres::{PgPool, PgRow},
-    types::Uuid,
-    FromRow, Row,
-};
+use sqlx::{postgres::PgPool, types::Uuid};
 
 #[derive(Deserialize)]
 enum SortBy {
     Popularity,
     TimeOfRelease,
     Raiting,
-}
-
-#[derive(Debug, Clone)]
-pub struct PostFromRow {
-    uuid: Uuid,
-    title: String,
-    content: String,
-    published_at: NaiveDateTime,
-    edited: EditedState,
-    author: String,
-    likes_count: i64,
-    dislikes_count: i64,
-    tags: Vec<String>,
-    raiting: f32,
-}
-
-impl PostFromRow {
-    pub fn likes_count(&self) -> u64 {
-        self.likes_count as u64
-    }
-    pub fn dislikes_count(&self) -> u64 {
-        self.dislikes_count as u64
-    }
-    pub fn uuid(&self) -> Uuid {
-        self.uuid.clone()
-    }
-    pub fn title(&self) -> String {
-        self.title.clone()
-    }
-
-    pub fn content(&self) -> String {
-        self.content.clone()
-    }
-
-    pub fn published_at(&self) -> NaiveDateTime {
-        self.published_at.clone()
-    }
-
-    pub fn edited_state(&self) -> EditedState {
-        self.edited.clone()
-    }
-
-    pub fn author(&self) -> String {
-        self.author.clone()
-    }
-
-    pub fn tags(&self) -> Vec<String> {
-        self.tags.clone()
-    }
-    pub fn raiting(&self) -> f32 {
-        self.raiting
-    }
 }
 
 pub struct PostsRepo(PgPool);
@@ -106,13 +49,34 @@ impl PostsRepo {
         Ok(self.get_by_uuid(uuid).await.unwrap())
     }
 
+    pub async fn edit_content(&self, post: PostModel, content: &str) {
+        sqlx::query(
+            "update posts set content = $1, edited = true, edited_at = now()  where uuid = $2;",
+        )
+        .bind(content)
+        .bind(post.uuid())
+        .execute(&self.0)
+        .await
+        .unwrap();
+    }
+    pub async fn edit_title(&self, post: PostModel, title: &str) {
+        sqlx::query(
+            "update posts set title = $1, edited = true, edited_at = now() where uuid = $2;",
+        )
+        .bind(title)
+        .bind(post.uuid())
+        .execute(&self.0)
+        .await
+        .unwrap();
+    }
+
     pub async fn get_by_uuid(&self, uuid: Uuid) -> Option<PostModel> {
-        match sqlx::query_as("select * from posts where uuid = $1;")
+        match sqlx::query("select * from posts where uuid = $1;")
             .bind(uuid)
             .fetch_one(&self.0)
             .await
         {
-            Ok(post) => Some(PostModel::from_row(post).await),
+            Ok(row) => Some(PostModel::from_row(&row).await),
             Err(_) => None,
         }
     }
@@ -155,13 +119,13 @@ impl PostsRepo {
             "
             .to_string(),
         ).build();
-        let from_row_posts = sqlx::query_as(&sql)
+        let rows = sqlx::query(&sql)
             .fetch_all(&self.0)
             .await
             .map_or(vec![], |post| post);
         let mut models = Vec::new();
-        for from_row_model in from_row_posts {
-            models.push(PostModel::from_row(from_row_model).await);
+        for row in rows {
+            models.push(PostModel::from_row(&row).await);
         }
         models
     }
@@ -217,22 +181,5 @@ impl ToSQL for GetQueryParam {
                 format!("tags @> \"{}{}{}\"", "{", tag_string, "}")
             }
         }
-    }
-}
-
-impl FromRow<'_, PgRow> for PostFromRow {
-    fn from_row(row: &PgRow) -> Result<Self, sqlx::Error> {
-        Ok(PostFromRow {
-            uuid: row.get("uuid"),
-            title: row.get("title"),
-            content: row.get("content"),
-            published_at: row.get("published_at"),
-            edited: EditedState::from_row(row)?,
-            author: row.get("author"),
-            tags: row.get("tags"),
-            likes_count: row.get("likes"),
-            raiting: row.get("raiting"),
-            dislikes_count: row.get("dislikes"),
-        })
     }
 }

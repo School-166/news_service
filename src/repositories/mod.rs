@@ -20,7 +20,7 @@ impl FromRow<'_, PgRow> for EditedState {
     }
 }
 
-pub async fn find_commentable(uuid: Uuid) -> Option<Box<dyn Resource>> {
+pub async fn find_resources(uuid: Uuid) -> Option<Box<dyn Resource>> {
     if let Some(comment) = CommentsRepo::get_instance()
         .await
         .get_by_uuid(uuid.clone())

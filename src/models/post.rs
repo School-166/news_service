@@ -1,15 +1,19 @@
 use super::{comment::CommentModel, user::UserModel};
 use crate::{
+    controllers::Controller,
+    dto::PublishCommentDTO,
+    prelude::{Commentable, EditError, Editable, Markable, PublishDTOBuilder, Resource},
     repositories::{
         comments::{CommentsRepo, GetCommentQueryParam},
-        posts::PostFromRow,
+        marks_repo::{posts::PostsMarkRepo, MarkAbleRepo},
+        posts::PostsRepo,
         users::{queries::GetByQueryParam, UserRepo},
     },
     types::EditedState,
 };
 use chrono::NaiveDateTime;
 use serde::Serialize;
-use sqlx::types::Uuid;
+use sqlx::{postgres::PgRow, types::Uuid, FromRow, Row};
 use std::str::FromStr;
 
 #[derive(Debug, Serialize, Clone)]
@@ -20,8 +24,8 @@ pub struct PostModel {
     published_at: NaiveDateTime,
     edited: EditedState,
     author: String,
-    likes: u64,
-    dislikes: u64,
+    likes: i64,
+    dislikes: i64,
     comments: Vec<CommentModel>,
     tags: Vec<String>,
     raiting: f32,
@@ -32,22 +36,24 @@ impl PostModel {
         Uuid::from_str(&self.uuid).unwrap()
     }
 
-    pub(crate) async fn from_row(from_row_model: PostFromRow) -> Self {
+    pub(crate) async fn from_row(row: &PgRow) -> Self {
+        let uuid: Uuid = row.get("uuid");
+
         PostModel {
-            uuid: from_row_model.uuid().to_string(),
-            title: from_row_model.title(),
-            content: from_row_model.content(),
-            published_at: from_row_model.published_at(),
-            edited: from_row_model.edited_state(),
-            author: from_row_model.author(),
-            likes: from_row_model.likes_count(),
-            dislikes: from_row_model.dislikes_count(),
+            uuid: uuid.to_string(),
+            title: row.get("title"),
+            content: row.get("content"),
+            published_at: row.get("published_at"),
+            edited: EditedState::from_row(&row).unwrap(),
+            author: row.get("author"),
+            tags: row.get("tags"),
+            likes: row.get("likes"),
+            raiting: row.get("raiting"),
+            dislikes: row.get("dislikes"),
             comments: CommentsRepo::get_instance()
                 .await
-                .get_many(vec![GetCommentQueryParam::Post(from_row_model.uuid())])
+                .get_many(vec![GetCommentQueryParam::Post(uuid)])
                 .await,
-            tags: from_row_model.tags(),
-            raiting: from_row_model.raiting(),
         }
     }
 
@@ -67,3 +73,58 @@ impl PostModel {
         self.title.clone()
     }
 }
+
+impl Markable for PostModel {
+    fn like(&self, user: &crate::controllers::users::UserController) {
+        futures::executor::block_on(async {
+            PostsMarkRepo::get_instance().await.like(user, self).await
+        })
+    }
+
+    fn dislike(&self, user: &crate::controllers::users::UserController) {
+        futures::executor::block_on(async {
+            PostsMarkRepo::get_instance()
+                .await
+                .dislike(user, self)
+                .await
+        })
+    }
+
+    fn uuid(&self) -> Uuid {
+        self.uuid()
+    }
+}
+
+impl Editable for PostModel {
+    fn edit(
+        &self,
+        comment: &str,
+        user: &crate::controllers::users::UserController,
+    ) -> Result<(), EditError> {
+        futures::executor::block_on(async {
+            if user.model().await.username() != self.author().await.username() {
+                return Err(EditError::EditsNotAuthor);
+            }
+            PostsRepo::get_instance()
+                .await
+                .edit_content(self.clone(), comment)
+                .await;
+            Ok(())
+        })
+    }
+}
+
+impl PublishDTOBuilder for PostModel {
+    fn build_dto(&self, content: String, author: UserModel) -> crate::dto::PublishCommentDTO {
+        PublishCommentDTO {
+            content,
+            author,
+            replys_for: None,
+            for_post: self.clone(),
+        }
+    }
+}
+
+impl Commentable for PostModel {}
+
+impl Resource for PostModel {}

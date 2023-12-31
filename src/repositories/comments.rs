@@ -1,9 +1,5 @@
-use super::posts::PostsRepo;
 use crate::{
-    dto::PublishCommentDTO,
-    get_db_pool,
-    models::{comment::CommentModel, user::UserModel},
-    prelude::{Commentable, PublishDTOBuilder, ToSQL},
+    dto::PublishCommentDTO, get_db_pool, models::comment::CommentModel, prelude::ToSQL,
     utils::sql::SelectRequestBuilder,
 };
 use sqlx::{types::Uuid, PgPool};
@@ -17,23 +13,6 @@ pub enum PublishError {
     WrittenUnderUnexistedPost,
     WrongLanguageCode,
 }
-
-impl PublishDTOBuilder for CommentModel {
-    async fn build_dto(&self, content: String, author: UserModel) -> PublishCommentDTO {
-        PublishCommentDTO {
-            content,
-            author,
-            for_post: PostsRepo::get_instance()
-                .await
-                .get_by_uuid(self.under_post().uuid())
-                .await
-                .unwrap(),
-            replys_for: Some(self.clone()),
-        }
-    }
-}
-
-impl Commentable for CommentModel {}
 
 impl CommentsRepo {
     pub async fn get_instance() -> CommentsRepo {

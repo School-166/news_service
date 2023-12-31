@@ -1,4 +1,8 @@
-use crate::{models::user::UserModel, prelude::Markable};
+use crate::{
+    controllers::{users::UserController, Controller},
+    models::user::UserModel,
+    prelude::Markable,
+};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
@@ -33,7 +37,7 @@ pub trait MarkableRepoMethods {
         Ok(())
     }
 
-    async fn mark(&self, user: UserModel, markable: Self::Markable, liked: bool) {
+    async fn mark(&self, user: UserModel, markable: &Self::Markable, liked: bool) {
         if self
             .is_marked_by(user.clone(), markable.clone(), None)
             .await
@@ -87,12 +91,12 @@ pub trait MarkableRepoMethods {
 pub trait MarkAbleRepo: MarkableRepoMethods + Sync {
     async fn get_instance() -> Self;
 
-    async fn like(&self, user: UserModel, markable: Self::Markable) {
-        self.mark(user, markable, true).await
+    async fn like(&self, user: &UserController, markable: &Self::Markable) {
+        self.mark(user.model().await, markable, true).await
     }
 
-    async fn dislike(&self, user: UserModel, markable: Self::Markable) {
-        self.mark(user, markable, false).await
+    async fn dislike(&self, user: &UserController, markable: &Self::Markable) {
+        self.mark(user.model().await, markable, false).await
     }
 
     async fn is_liked_by(&self, user: UserModel, markable: Self::Markable) -> bool {

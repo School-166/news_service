@@ -27,7 +27,7 @@ pub fn user_scope() -> Scope {
 
 #[get("/")]
 async fn get_user(sing_dto: Json<SingDTO>) -> impl Responder {
-    match UserController::sing(sing_dto.username.clone(), sing_dto.password.clone()).await {
+    match UserController::sing(&sing_dto).await {
         Ok(user) => HttpResponse::Ok().json(user.model().await),
         Err(err) => HttpResponse::NotFound().json(err),
     }
@@ -45,22 +45,17 @@ async fn register(publish_dto: Json<UserRegistrationDTO>) -> impl Responder {
     }
 }
 
-#[post("/{username}/post")]
-async fn publish_post(
-    username: Path<String>,
-    publish_dto: Json<PublishPostJSON>,
-) -> impl Responder {
-    let author = UserRepo::get_instance()
-        .await
-        .get_by_username((*username).clone())
-        .await;
+#[post("/post")]
+async fn publish_post(publish_dto: Json<(PublishPostJSON, SingDTO)>) -> impl Responder {
+    let (publish_dto, sing_data) = publish_dto.clone();
+    let author = UserController::sing(&sing_data).await;
     let dto = match author {
-        Some(author) => PublishPostDTO {
-            content: (*publish_dto).content.clone(),
-            title: (*publish_dto).title.clone(),
-            author,
+        Ok(author) => PublishPostDTO {
+            content: publish_dto.content.clone(),
+            title: publish_dto.title.clone(),
+            author: author.model().await,
         },
-        None => return HttpResponse::NotFound().finish(),
+        Err(_) => return HttpResponse::NotFound().finish(),
     };
     HttpResponse::Created().json(PostsRepo::get_instance().await.publish(dto).await.unwrap())
 }
@@ -69,7 +64,7 @@ async fn publish_post(
 async fn mark(path: Path<(String, bool)>, json: Json<SingDTO>) -> impl Responder {
     let (post, liked) = (*path).clone();
     let sing_data = json.clone();
-    let controller = match UserController::sing(sing_data.username, sing_data.password).await {
+    let controller = match UserController::sing(&sing_data).await {
         Ok(user) => user,
         Err(err) => return HttpResponse::BadRequest().json(err),
     };
@@ -98,7 +93,7 @@ pub struct CommentJSON {
 async fn comment(path: Path<String>, json: Json<(CommentJSON, SingDTO)>) -> impl Responder {
     let post = path.clone();
     let (content, sing_data) = json.clone();
-    let controller = match UserController::sing(sing_data.username, sing_data.password).await {
+    let controller = match UserController::sing(&sing_data).await {
         Ok(controller) => controller,
         Err(err) => return HttpResponse::BadRequest().json(err),
     };
@@ -117,7 +112,7 @@ async fn comment(path: Path<String>, json: Json<(CommentJSON, SingDTO)>) -> impl
 #[patch("/change")]
 async fn change_param(params: Json<(Vec<ChangeQueryParam>, SingDTO)>) -> impl Responder {
     let (params, sing_data) = params.clone();
-    let controller = match UserController::sing(sing_data.username, sing_data.password).await {
+    let controller = match UserController::sing(&sing_data).await {
         Ok(controller) => controller,
         Err(err) => return HttpResponse::BadRequest().json(err),
     };

@@ -19,7 +19,7 @@ pub enum SortDirectionDTO {
     Decrement,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct PublishPostJSON {
     pub title: String,
     pub content: String,

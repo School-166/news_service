@@ -1,5 +1,6 @@
 use super::Controller;
 use crate::{
+    dto::SingDTO,
     models::user::UserModel,
     prelude::{EditError, Resource},
     repositories::users::{queries::ChangeQueryParam, UserRepo},
@@ -16,7 +17,7 @@ impl Controller for UserController {
     async fn model(&self) -> UserModel {
         UserRepo::get_instance()
             .await
-            .get_by_username(self.username.clone())
+            .get_by_username(&self.username())
             .await
             .unwrap()
     }
@@ -29,14 +30,14 @@ pub enum SingError {
 }
 
 impl UserController {
-    pub async fn sing(username: String, password: String) -> Result<Self, SingError> {
+    pub async fn sing(sing_data: &SingDTO) -> Result<Self, SingError> {
         match UserRepo::get_instance()
             .await
-            .get_by_username(username)
+            .get_by_username(&sing_data.username)
             .await
         {
             Some(user) => {
-                if password != user.password() {
+                if sing_data.password != user.password() {
                     return Err(SingError::WrongPassword);
                 }
                 Ok(UserController {

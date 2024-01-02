@@ -101,12 +101,13 @@ impl UserRepo {
         self.0.clone()
     }
 
-    pub async fn get_by_uuid(&self, uuid: Uuid) -> Option<UserModel> {
-        self.get_one_by(vec![GetByQueryParam::Uuid(uuid)]).await
+    pub async fn get_by_uuid(&self, uuid: &Uuid) -> Option<UserModel> {
+        self.get_one_by(vec![GetByQueryParam::Uuid(uuid.clone())])
+            .await
     }
 
-    pub async fn get_by_username(&self, username: String) -> Option<UserModel> {
-        self.get_one_by(vec![GetByQueryParam::Username(username)])
+    pub async fn get_by_username(&self, username: &str) -> Option<UserModel> {
+        self.get_one_by(vec![GetByQueryParam::Username(username.to_string())])
             .await
     }
 

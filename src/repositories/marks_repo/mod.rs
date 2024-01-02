@@ -89,7 +89,7 @@ pub trait MarkableRepoMethods {
 }
 
 pub trait MarkAbleRepo: MarkableRepoMethods + Sync {
-    async fn get_instance() -> Self;
+    fn get_instance() -> Self;
 
     async fn like(&self, user: &UserController, markable: &Self::Markable) {
         self.mark(user.model().await, markable, true).await

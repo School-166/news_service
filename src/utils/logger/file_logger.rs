@@ -1,8 +1,9 @@
 use std::{
-    fs::{self, File},
-    io::Error,
-    path::Path,
+    fs::File,
+    io::{Error, Write},
 };
+
+use chrono::Utc;
 
 use super::Logger;
 
@@ -17,22 +18,31 @@ impl FileLogger {
         })
     }
 
-    fn write_to_file(&self, log: &str) {}
+    fn write_to_file(&self, log: &str) {
+        self.open_file().write_all(log.as_bytes()).unwrap()
+    }
     fn open_file(&self) -> File {
-        todo!()
+        match File::options().append(true).open(format!(
+            "{}/{}",
+            self.directory.clone(),
+            Utc::now().date_naive()
+        )) {
+            Ok(file) => file,
+            Err(_) => File::create(format!("{}/{}", self.directory, Utc::now())).unwrap(),
+        }
     }
 }
 
 impl Logger for FileLogger {
     fn info(&self, log: &str) {
-        todo!()
+        self.write_to_file(log)
     }
 
     fn warning(&self, log: &str) {
-        todo!()
+        self.write_to_file(log)
     }
 
     fn error(&self, log: &str) {
-        todo!()
+        self.write_to_file(log)
     }
 }

@@ -39,13 +39,14 @@ pub enum EditError {
 }
 
 pub trait Editable {
-    fn edit(&self, comment: &str, user: &UserController) -> Result<(), EditError>;
+    fn edit(&self, content: &str, user: &UserController);
 }
 
 pub trait Resource
 where
     Self: Markable + Commentable + Editable + Sync,
 {
+    fn author(&self) -> UserModel;
 }
 
 pub enum SortingDirection<T>

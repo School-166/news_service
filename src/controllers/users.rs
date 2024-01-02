@@ -1,7 +1,7 @@
 use super::Controller;
 use crate::{
     models::user::UserModel,
-    prelude::Resource,
+    prelude::{EditError, Resource},
     repositories::users::{queries::ChangeQueryParam, UserRepo},
     validators::repository_query::users::{ValidatedChangeQueryParam, ValidationError},
 };
@@ -75,11 +75,32 @@ impl UserController {
         resource.comment(content, &self);
     }
 
-    pub async fn like(&self, markable: Box<dyn Resource>) {
-        markable.like(&self)
+    pub async fn like(&self, resource: Box<dyn Resource>) {
+        resource.like(&self)
     }
 
-    pub async fn dislike(&self, markable: Box<dyn Resource>) {
-        markable.dislike(&self)
+    pub async fn dislike(&self, resource: Box<dyn Resource>) {
+        resource.dislike(&self)
+    }
+
+    pub fn is_owner_of(&self, resource: &dyn Resource) -> bool {
+        self.username() == resource.author().username()
+    }
+
+    fn username(&self) -> String {
+        self.username.clone()
+    }
+
+    pub async fn edit(
+        &self,
+        resource: Box<dyn Resource>,
+        content: String,
+    ) -> Result<(), crate::prelude::EditError> {
+        if self.is_owner_of(resource.as_ref()) {
+            resource.edit(&content, self);
+            return Ok(());
+        }
+
+        return Err(EditError::EditsNotAuthor);
     }
 }

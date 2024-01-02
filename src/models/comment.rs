@@ -1,8 +1,8 @@
 use super::{post::PostModel, user::UserModel};
 use crate::{
-    controllers::{users::UserController, Controller},
+    controllers::users::UserController,
     dto::PublishCommentDTO,
-    prelude::{Commentable, EditError, Editable, Markable, PublishDTOBuilder, Resource},
+    prelude::{Commentable, Editable, Markable, PublishDTOBuilder, Resource},
     repositories::{
         comments::{CommentsRepo, GetCommentQueryParam},
         marks_repo::{comments::CommentsMarkRepo, MarkAbleRepo},
@@ -92,17 +92,13 @@ impl PublishDTOBuilder for CommentModel {
 impl Commentable for CommentModel {}
 
 impl Editable for CommentModel {
-    fn edit(&self, content: &str, user: &UserController) -> Result<(), EditError> {
+    fn edit(&self, content: &str, user: &UserController) {
         futures::executor::block_on(async {
-            if self.author.username() != user.model().await.username() {
-                return Err(EditError::EditsNotAuthor);
-            }
             CommentsRepo::get_instance()
                 .await
-                .edit_comment(self.clone(), content.to_string())
+                .edit_comment(self.clone(), content.to_string(), user)
                 .await
                 .unwrap();
-            Ok(())
         })
     }
 }
@@ -110,19 +106,13 @@ impl Editable for CommentModel {
 impl Markable for CommentModel {
     fn like(&self, user: &UserController) {
         futures::executor::block_on(async {
-            CommentsMarkRepo::get_instance()
-                .await
-                .like(&user, self)
-                .await
+            CommentsMarkRepo::get_instance().like(&user, self).await
         })
     }
 
     fn dislike(&self, user: &UserController) {
         futures::executor::block_on(async {
-            CommentsMarkRepo::get_instance()
-                .await
-                .dislike(user, &self)
-                .await
+            CommentsMarkRepo::get_instance().dislike(user, &self).await
         })
     }
 
@@ -131,4 +121,8 @@ impl Markable for CommentModel {
     }
 }
 
-impl Resource for CommentModel {}
+impl Resource for CommentModel {
+    fn author(&self) -> UserModel {
+        self.author.clone()
+    }
+}

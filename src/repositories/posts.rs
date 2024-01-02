@@ -1,4 +1,5 @@
 use crate::{
+    controllers::{users::UserController, Controller},
     dto::PublishPostDTO,
     get_db_pool,
     models::post::PostModel,
@@ -49,22 +50,24 @@ impl PostsRepo {
         Ok(self.get_by_uuid(uuid).await.unwrap())
     }
 
-    pub async fn edit_content(&self, post: PostModel, content: &str) {
+    pub async fn edit_content(&self, post: PostModel, content: &str, author: &UserController) {
         sqlx::query(
-            "update posts set content = $1, edited = true, edited_at = now()  where uuid = $2;",
+            "update posts set content = $1, edited = true, edited_at = now()  where uuid = $2 and author = $3;",
         )
         .bind(content)
         .bind(post.uuid())
+            .bind(author.model().await.username())
         .execute(&self.0)
         .await
         .unwrap();
     }
-    pub async fn edit_title(&self, post: PostModel, title: &str) {
+    pub async fn edit_title(&self, post: PostModel, title: &str, author: &UserController) {
         sqlx::query(
-            "update posts set title = $1, edited = true, edited_at = now() where uuid = $2;",
+            "update posts set title = $1, edited = true, edited_at = now() where uuid = $2 and author = $3;",
         )
         .bind(title)
         .bind(post.uuid())
+            .bind(author.model().await.username())
         .execute(&self.0)
         .await
         .unwrap();

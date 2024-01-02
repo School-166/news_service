@@ -20,7 +20,7 @@ impl MarkableRepoMethods for PostsMarkRepo {
 }
 
 impl MarkAbleRepo for PostsMarkRepo {
-    async fn get_instance() -> Self {
-        PostsMarkRepo(get_db_pool().await)
+    fn get_instance() -> Self {
+        PostsMarkRepo(futures::executor::block_on(get_db_pool()))
     }
 }

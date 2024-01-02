@@ -20,7 +20,7 @@ impl MarkableRepoMethods for CommentsMarkRepo {
 }
 
 impl MarkAbleRepo for CommentsMarkRepo {
-    async fn get_instance() -> Self {
-        CommentsMarkRepo(get_db_pool().await)
+    fn get_instance() -> Self {
+        CommentsMarkRepo(futures::executor::block_on(get_db_pool()))
     }
 }

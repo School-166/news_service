@@ -1,8 +1,8 @@
 use super::{comment::CommentModel, user::UserModel};
 use crate::{
-    controllers::Controller,
+    controllers::users::UserController,
     dto::PublishCommentDTO,
-    prelude::{Commentable, EditError, Editable, Markable, PublishDTOBuilder, Resource},
+    prelude::{Commentable, Editable, Markable, PublishDTOBuilder, Resource},
     repositories::{
         comments::{CommentsRepo, GetCommentQueryParam},
         marks_repo::{posts::PostsMarkRepo, MarkAbleRepo},
@@ -75,18 +75,13 @@ impl PostModel {
 }
 
 impl Markable for PostModel {
-    fn like(&self, user: &crate::controllers::users::UserController) {
-        futures::executor::block_on(async {
-            PostsMarkRepo::get_instance().await.like(user, self).await
-        })
+    fn like(&self, user: &UserController) {
+        futures::executor::block_on(async { PostsMarkRepo::get_instance().like(user, self).await })
     }
 
-    fn dislike(&self, user: &crate::controllers::users::UserController) {
+    fn dislike(&self, user: &UserController) {
         futures::executor::block_on(async {
-            PostsMarkRepo::get_instance()
-                .await
-                .dislike(user, self)
-                .await
+            PostsMarkRepo::get_instance().dislike(user, self).await
         })
     }
 
@@ -96,20 +91,12 @@ impl Markable for PostModel {
 }
 
 impl Editable for PostModel {
-    fn edit(
-        &self,
-        comment: &str,
-        user: &crate::controllers::users::UserController,
-    ) -> Result<(), EditError> {
+    fn edit(&self, content: &str, user: &UserController) {
         futures::executor::block_on(async {
-            if user.model().await.username() != self.author().await.username() {
-                return Err(EditError::EditsNotAuthor);
-            }
             PostsRepo::get_instance()
                 .await
-                .edit_content(self.clone(), comment)
+                .edit_content(self.clone(), content, user)
                 .await;
-            Ok(())
         })
     }
 }
@@ -127,4 +114,8 @@ impl PublishDTOBuilder for PostModel {
 
 impl Commentable for PostModel {}
 
-impl Resource for PostModel {}
+impl Resource for PostModel {
+    fn author(&self) -> UserModel {
+        futures::executor::block_on(PostModel::author(self))
+    }
+}

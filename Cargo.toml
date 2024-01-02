@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+actix-swagger = "0.3.1"
 actix-web = {version = "*", features = ["openssl"]}
 async-recursion = "1.0.5"
 async_once = "0.2.6"
@@ -16,6 +17,7 @@ dotenv = "0.15.0"
 futures = "0.3.30"
 lazy_static = "1.4.0"
 openssl = "0.10.61"
+redis = {version = "0.24.0", features = ["json"]}
 regex = "1.10.2"
 serde = "1.0.193"
 serde_json = "1.0.108"

@@ -1,5 +1,9 @@
 use crate::{
-    dto::PublishCommentDTO, get_db_pool, models::comment::CommentModel, prelude::ToSQL,
+    controllers::{users::UserController, Controller},
+    dto::PublishCommentDTO,
+    get_db_pool,
+    models::comment::CommentModel,
+    prelude::ToSQL,
     utils::sql::SelectRequestBuilder,
 };
 use sqlx::{types::Uuid, PgPool};
@@ -55,19 +59,21 @@ impl CommentsRepo {
         &self,
         comment: CommentModel,
         updated_content: String,
+        author: &UserController,
     ) -> Result<CommentModel, sqlx::Error> {
         let edited_at = chrono::Utc::now();
 
         sqlx::query(
             r#"
         UPDATE comments
-        SET content = $2, edited = true, edited_at = $3
-        WHERE id = $1;
+        SET content = $1, edited = true, edited_at = $2
+        WHERE id = $3 and author = $4;
         "#,
         )
-        .bind(comment.uuid())
         .bind(updated_content)
         .bind(edited_at)
+        .bind(comment.uuid())
+        .bind(author.model().await.username())
         .execute(&self.0)
         .await?;
 

@@ -27,13 +27,9 @@ pub enum RegistrationError {
 async fn create_user(
     uuid: Uuid,
     user_dto: &UserRegistrationDTO,
-    pool: &PgPool,
+    repo: &UserRepo,
 ) -> Result<(), RegistrationError> {
-    if !UserRepo::get_instance()
-        .await
-        .is_username_free(user_dto.username.clone())
-        .await
-    {
+    if !repo.is_username_free(user_dto.username.clone()).await {
         return Err(RegistrationError::UsernameAlreadyExists);
     }
 
@@ -57,7 +53,7 @@ async fn create_user(
         .bind(user_type)
         .bind(user_dto.birth_date)
         .bind(user_dto.about.clone())
-        .execute(pool)
+        .execute(&repo.pool())
         .await
         .expect("error in sql");
     Ok(())
@@ -67,24 +63,29 @@ async fn create_user_specs(
     user_dto: &UserRegistrationDTO,
     pool: &PgPool,
 ) -> Result<(), RegistrationError> {
+    let username = user_dto.username.as_str();
     let sql = format!(
         "insert into {};",
-        match user_dto.user_specs {
-            UserType::Teacher { subject: _ } => "teachers (username, subject) values ($1, $2)",
-            UserType::Student { class: _ } =>
-                "students (username, class_num, class_char) values ($1, $2, $3)",
-            UserType::Administrator { job_title: _ } =>
-                "administrators (username, job_title) values($1, $2)",
+        match user_dto.user_specs.clone() {
+            UserType::Teacher { subject } => format!(
+                "teachers (username, subject) values ('{}', '{}')",
+                username,
+                subject.to_string()
+            ),
+            UserType::Student { class } => format!(
+                "students (username, class_num, class_char) values ('{}', {}, '{}')",
+                username,
+                class.class_num(),
+                class.class_char()
+            ),
+            UserType::Administrator { job_title } => format!(
+                "administrators (username, job_title) values('{}', '{}')",
+                username, job_title
+            ),
             UserType::Other => return Ok(()),
         }
     );
-    let mut query = sqlx::query(&sql).bind(user_dto.username.clone());
-    query = match user_dto.user_specs.clone() {
-        UserType::Teacher { subject } => query.bind(subject.to_string()),
-        UserType::Student { class } => query.bind(class.class_num() as i8).bind(class.class_char()),
-        UserType::Administrator { job_title } => query.bind(job_title),
-        UserType::Other => return Ok(()),
-    };
+    let query = sqlx::query(&sql);
 
     if query.execute(pool).await.is_err() {
         return Err(RegistrationError::ProblemsWithDB);
@@ -102,36 +103,30 @@ impl UserRepo {
     }
 
     pub async fn get_by_uuid(&self, uuid: &Uuid) -> Option<UserModel> {
-        self.get_one_by(vec![GetByQueryParam::Uuid(uuid.clone())])
+        self.get_one(vec![GetByQueryParam::Uuid(uuid.clone())])
             .await
     }
 
     pub async fn get_by_username(&self, username: &str) -> Option<UserModel> {
-        self.get_one_by(vec![GetByQueryParam::Username(username.to_string())])
+        self.get_one(vec![GetByQueryParam::Username(username.to_string())])
             .await
     }
 
-    pub async fn register_user(
+    pub async fn register(
         &self,
-        user_dto: UserRegistrationDTO,
+        registration_dto: UserRegistrationDTO,
     ) -> Result<UserModel, RegistrationError> {
         let uuid = Uuid::new_v4();
-        create_user(uuid.clone(), &user_dto, &self.pool()).await?;
-        create_user_specs(&user_dto, &self.pool()).await?;
-        Ok(self
-            .get_one_by(vec![GetByQueryParam::Uuid(uuid)])
-            .await
-            .expect("unreacheble"))
+        create_user(uuid.clone(), &registration_dto, &self).await?;
+        create_user_specs(&registration_dto, &self.pool()).await?;
+        Ok(self.get_by_uuid(&uuid).await.unwrap())
     }
 
-    pub async fn get_one_by(&self, params: Vec<GetByQueryParam>) -> Option<UserModel> {
-        self.get_many_by(params)
-            .await
-            .first()
-            .map(|user| user.clone())
+    async fn get_one(&self, params: Vec<GetByQueryParam>) -> Option<UserModel> {
+        self.get_many(params).await.first().map(|user| user.clone())
     }
 
-    pub async fn get_many_by(&self, params: Vec<GetByQueryParam>) -> Vec<UserModel> {
+    pub async fn get_many(&self, params: Vec<GetByQueryParam>) -> Vec<UserModel> {
         let sql = SelectRequestBuilder::<(), GetByQueryParam>::new(
             "select   
                  users.uuid,
@@ -166,12 +161,12 @@ impl UserRepo {
     }
 
     pub async fn is_username_free(&self, username: String) -> bool {
-        self.get_one_by(vec![GetByQueryParam::Username(username)])
+        self.get_one(vec![GetByQueryParam::Username(username)])
             .await
             .is_none()
     }
 
-    pub async fn change_params(&self, params: Vec<ValidatedChangeQueryParam>, model: UserModel) {
+    pub async fn change(&self, params: Vec<ValidatedChangeQueryParam>, model: UserModel) {
         for param in params {
             let _ = sqlx::query(&ChangeQuery::new(&model, param).to_sql())
                 .execute(&self.pool())

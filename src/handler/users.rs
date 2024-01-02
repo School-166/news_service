@@ -21,7 +21,7 @@ pub fn user_scope() -> Scope {
         .service(get_user)
         .service(publish_post)
         .service(mark)
-        .service(comment)
+        .service(row)
         .service(register)
 }
 
@@ -37,7 +37,7 @@ async fn get_user(sing_dto: Json<SingDTO>) -> impl Responder {
 async fn register(publish_dto: Json<UserRegistrationDTO>) -> impl Responder {
     match UserRepo::get_instance()
         .await
-        .register_user(publish_dto.clone())
+        .register(publish_dto.clone())
         .await
     {
         Ok(user) => HttpResponse::Created().json(user),
@@ -90,7 +90,7 @@ pub struct CommentJSON {
 }
 
 #[post("/comment/{commentable_uuid}")]
-async fn comment(path: Path<String>, json: Json<(CommentJSON, SingDTO)>) -> impl Responder {
+async fn row(path: Path<String>, json: Json<(CommentJSON, SingDTO)>) -> impl Responder {
     let post = path.clone();
     let (content, sing_data) = json.clone();
     let controller = match UserController::sing(&sing_data).await {

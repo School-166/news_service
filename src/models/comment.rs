@@ -4,7 +4,7 @@ use crate::{
     dto::PublishCommentDTO,
     prelude::{Commentable, Editable, Markable, PublishDTOBuilder, Resource},
     repositories::{
-        comments::{CommentsRepo, GetCommentQueryParam},
+        comments::CommentsRepo,
         marks_repo::{comments::CommentsMarkRepo, MarkAbleRepo},
         posts::PostsRepo,
         users::UserRepo,
@@ -27,18 +27,25 @@ pub struct CommentModel {
     likes: i64,
     published_at: NaiveDateTime,
     replys_for: Option<String>,
-    under_post: PostModel,
+    post: PostModel,
     uuid: String,
 }
 
 impl CommentModel {
     #[async_recursion]
-    pub async fn from_row(row: PgRow) -> CommentModel {
+    pub async fn from_row(row: &PgRow) -> CommentModel {
         let uuid: Uuid = row.get("uuid");
+
+        let post = PostsRepo::get_instance()
+            .await
+            .get_by_uuid(row.get("under_post"))
+            .await
+            .unwrap();
         let comments = CommentsRepo::get_instance()
             .await
-            .get_many(vec![GetCommentQueryParam::Replies(uuid.clone())])
+            .get_by_post(&post.uuid())
             .await;
+
         CommentModel {
             uuid: uuid.to_string(),
             content: row.get("content"),
@@ -53,11 +60,7 @@ impl CommentModel {
             dislikes: row.get("dislikes"),
             comments,
             replys_for: row.get("replys_for"),
-            under_post: PostsRepo::get_instance()
-                .await
-                .get_by_uuid(row.get("under_post"))
-                .await
-                .unwrap(),
+            post,
         }
     }
 
@@ -70,7 +73,7 @@ impl CommentModel {
     }
 
     pub fn under_post(&self) -> PostModel {
-        self.under_post.clone()
+        self.post.clone()
     }
 }
 
@@ -96,7 +99,7 @@ impl Editable for CommentModel {
         futures::executor::block_on(async {
             CommentsRepo::get_instance()
                 .await
-                .edit_comment(self.clone(), content.to_string(), user)
+                .edit(self.clone(), content.to_string(), user)
                 .await
                 .unwrap();
         })

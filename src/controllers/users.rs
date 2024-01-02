@@ -67,7 +67,7 @@ impl UserController {
         }
         UserRepo::get_instance()
             .await
-            .change_params(validated_params, self.model().await)
+            .change(validated_params, self.model().await)
             .await;
         Ok(())
     }

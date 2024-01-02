@@ -4,10 +4,10 @@ use crate::{
     dto::PublishCommentDTO,
     prelude::{Commentable, Editable, Markable, PublishDTOBuilder, Resource},
     repositories::{
-        comments::{CommentsRepo, GetCommentQueryParam},
+        comments::CommentsRepo,
         marks_repo::{posts::PostsMarkRepo, MarkAbleRepo},
         posts::PostsRepo,
-        users::{queries::GetByQueryParam, UserRepo},
+        users::UserRepo,
     },
     types::EditedState,
 };
@@ -50,17 +50,14 @@ impl PostModel {
             likes: row.get("likes"),
             raiting: row.get("raiting"),
             dislikes: row.get("dislikes"),
-            comments: CommentsRepo::get_instance()
-                .await
-                .get_many(vec![GetCommentQueryParam::Post(uuid)])
-                .await,
+            comments: CommentsRepo::get_instance().await.get_by_post(&uuid).await,
         }
     }
 
     pub async fn author(&self) -> UserModel {
         UserRepo::get_instance()
             .await
-            .get_one_by(vec![GetByQueryParam::Username(self.author.clone())])
+            .get_by_username(&self.author)
             .await
             .unwrap()
     }

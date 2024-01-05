@@ -72,15 +72,15 @@ impl UserController {
         Ok(())
     }
 
-    pub async fn comment(&self, resource: Box<dyn Resource>, content: String) {
+    pub async fn comment(&self, resource: &dyn Resource, content: String) {
         resource.comment(content, &self);
     }
 
-    pub async fn like(&self, resource: Box<dyn Resource>) {
+    pub async fn like(&self, resource: &dyn Resource) {
         resource.like(&self)
     }
 
-    pub async fn dislike(&self, resource: Box<dyn Resource>) {
+    pub async fn dislike(&self, resource: &dyn Resource) {
         resource.dislike(&self)
     }
 
@@ -94,14 +94,13 @@ impl UserController {
 
     pub async fn edit(
         &self,
-        resource: Box<dyn Resource>,
+        resource: &dyn Resource,
         content: String,
     ) -> Result<(), crate::prelude::EditError> {
-        if self.is_owner_of(resource.as_ref()) {
+        if self.is_owner_of(resource) {
             resource.edit(&content, self);
             return Ok(());
         }
-
         return Err(EditError::EditsNotAuthor);
     }
 }

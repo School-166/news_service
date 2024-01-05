@@ -8,6 +8,41 @@ use crate::{
     validators::repository_query::users::{ValidatedChangeQueryParam, ValidationError},
 };
 
+trait GetParametr: ToSQL {}
+
+pub struct UuidParametr(Uuid);
+impl UuidParametr {
+    pub fn new(uuid: &Uuid) -> UuidParametr {
+        UuidParametr(uuid.clone())
+    }
+}
+impl ToSQL for UuidParametr {
+    fn to_sql(&self) -> String {
+        format!("uuid = '{}'", self.0.to_string())
+    }
+}
+impl GetParametr for UuidParametr {}
+
+pub struct UsernameParametr(String);
+impl UsernameParametr {
+    pub fn new(username: &str) -> UsernameParametr {
+        UsernameParametr(username.to_string())
+    }
+}
+impl ToSQL for UsernameParametr {
+    fn to_sql(&self) -> String {
+        format!("username = '{}'", self.0.clone())
+    }
+}
+impl GetParametr for UsernameParametr {}
+
+pub struct LastNameParametr(String);
+impl LastNameParametr {
+    pub fn new(last_name: &str) -> LastNameParametr {
+        LastNameParametr(last_name.to_string())
+    }
+}
+
 pub enum GetByQueryParam {
     Uuid(Uuid),
     Username(String),

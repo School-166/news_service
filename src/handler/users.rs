@@ -1,15 +1,19 @@
 use crate::{
-    controllers::{users::UserController, Controller},
+    controllers::{
+        users::{SingError, UserController},
+        Controller,
+    },
     dto::{PublishPostDTO, PublishPostJSON, SingDTO, UserRegistrationDTO},
     repositories::{
         find_resources,
         posts::PostsRepo,
         users::{queries::ChangeQueryParam, UserRepo},
     },
+    utils::logger::Logger,
 };
 use actix_web::{
     get, patch, post,
-    web::{Json, Path},
+    web::{Data, Json, Path},
     HttpResponse, Responder, Scope,
 };
 use serde::Deserialize;
@@ -23,6 +27,14 @@ pub fn user_scope() -> Scope {
         .service(mark)
         .service(row)
         .service(register)
+}
+
+fn log_sing_error(logger: &dyn Logger, username: &str, err: &SingError) {
+    logger.error(&format!(
+        "can't sing to {}. {}",
+        username,
+        serde_json::to_string(&err).unwrap()
+    ));
 }
 
 #[get("/")]
@@ -60,26 +72,50 @@ async fn publish_post(publish_dto: Json<(PublishPostJSON, SingDTO)>) -> impl Res
     HttpResponse::Created().json(PostsRepo::get_instance().await.publish(dto).await.unwrap())
 }
 
+fn log_uuid_generating_error(logger: &dyn Logger, uuid_string: &str) {
+    logger.error(&format!("can't build uuid from \"{}\"", uuid_string))
+}
+
+fn log_resource_getting_error(logger: &dyn Logger, uuid: &Uuid) {
+    logger.error(&format!(
+        "can't find resource by uuid = {}",
+        uuid.to_string()
+    ))
+}
+
 #[post("/{resource_uuid}/liked/{liked}")]
-async fn mark(path: Path<(String, bool)>, json: Json<SingDTO>) -> impl Responder {
-    let (post, liked) = (*path).clone();
+async fn mark(
+    path: Path<(String, bool)>,
+    json: Json<SingDTO>,
+    logger: Data<dyn Logger>,
+) -> impl Responder {
+    let (resource_uuid, liked) = (*path).clone();
     let sing_data = json.clone();
-    let controller = match UserController::sing(&sing_data).await {
-        Ok(user) => user,
-        Err(err) => return HttpResponse::BadRequest().json(err),
+    let user_controller = match UserController::sing(&sing_data).await {
+        Ok(controller) => controller,
+        Err(err) => {
+            log_sing_error(logger.as_ref(), &sing_data.username, &err);
+            return HttpResponse::BadRequest().json(err);
+        }
     };
-    let uuid = match Uuid::from_str(&post) {
+    let resource_uuid = match Uuid::from_str(&resource_uuid) {
         Ok(uuid) => uuid,
-        Err(_) => return HttpResponse::BadRequest().finish(),
+        Err(_) => {
+            log_uuid_generating_error(logger.as_ref(), &resource_uuid);
+            return HttpResponse::BadRequest().finish();
+        }
     };
-    let post = match find_resources(uuid).await {
-        Some(post) => post,
-        None => return HttpResponse::NotFound().finish(),
+    let resource = match find_resources(resource_uuid).await {
+        Some(resource) => resource,
+        None => {
+            log_resource_getting_error(logger.as_ref(), &resource_uuid);
+            return HttpResponse::NotFound().finish();
+        }
     };
     if liked {
-        controller.like(post).await
+        user_controller.like(resource.as_ref()).await
     } else {
-        controller.dislike(post).await
+        user_controller.dislike(resource.as_ref()).await
     }
     HttpResponse::Accepted().finish()
 }
@@ -89,23 +125,44 @@ pub struct CommentJSON {
     content: String,
 }
 
-#[post("/comment/{commentable_uuid}")]
-async fn row(path: Path<String>, json: Json<(CommentJSON, SingDTO)>) -> impl Responder {
-    let post = path.clone();
-    let (content, sing_data) = json.clone();
+#[post("/comment/{resource_uuid}")]
+async fn row(
+    path: Path<String>,
+    json: Json<(CommentJSON, SingDTO)>,
+    logger: Data<dyn Logger>,
+) -> impl Responder {
+    let resource_uuid = path.clone();
+    let (comment, sing_data) = json.clone();
+    logger.info(&format!(
+        "started comment query by {}",
+        sing_data.username.clone()
+    ));
     let controller = match UserController::sing(&sing_data).await {
         Ok(controller) => controller,
-        Err(err) => return HttpResponse::BadRequest().json(err),
+        Err(err) => {
+            log_sing_error(logger.as_ref(), &sing_data.username, &err);
+            return HttpResponse::BadRequest().json(err);
+        }
     };
-    let resource_uuid = match Uuid::from_str(&post) {
+    let resource_uuid = match Uuid::from_str(&resource_uuid) {
         Ok(uuid) => uuid,
-        Err(_) => return HttpResponse::BadRequest().finish(),
+        Err(_) => {
+            log_uuid_generating_error(logger.as_ref(), &resource_uuid);
+            return HttpResponse::BadRequest().finish();
+        }
     };
-    let comment = match find_resources(resource_uuid).await {
+    let resource = match find_resources(resource_uuid).await {
         Some(post) => post,
-        None => return HttpResponse::NotFound().finish(),
+        None => {
+            log_resource_getting_error(logger.as_ref(), &resource_uuid);
+            return HttpResponse::NotFound().finish();
+        }
     };
-    controller.comment(comment, content.content).await;
+    controller.comment(resource.as_ref(), comment.content).await;
+    logger.info(&format!(
+        "resource: {}, commented succesfully",
+        resource_uuid
+    ));
     HttpResponse::Accepted().finish()
 }
 
